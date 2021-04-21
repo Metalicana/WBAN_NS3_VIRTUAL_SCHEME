@@ -1,5 +1,9 @@
 
 #include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
 #include "ns3/log.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -10,6 +14,16 @@
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
+
+#include "cryptopp/aes.h"
+#include "cryptopp/default.h"
+#include "cryptopp/osrng.h"
+#include "cryptopp/modes.h"
+#include "cryptopp/cryptlib.h"
+#include "cryptopp/seckey.h"
+#include "cryptopp/randpool.h"
+#include "cryptopp/rdrand.h"
+
 #include "GatewayApp.h"
 
 using namespace ns3;
@@ -35,6 +49,7 @@ namespace ns3
 {
   NS_LOG_COMPONENT_DEFINE("GatewayApp");
   NS_OBJECT_ENSURE_REGISTERED(GatewayApp);
+
   GatewayApp::GatewayApp ()
   : speaker_socket (0), 
     listener_socket (0), 
@@ -67,25 +82,77 @@ GatewayApp::Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Ad
   port = _port;
   m_id = _m_id;
 }
-
+void GatewayApp::ReadKeys()
+{
+  fstream input;
+  input.open("DoctorKeys",fstream::in);
+  string g;
+  int l =0,x,p=0;
+  byte *current_key[3];
+  key_comb cur;
+  while(std::getline(input,g))
+  {
+    
+    stringstream ss(g);
+    
+    p=0;
+    while(ss >> x)
+    {
+      current_key[l][p]=x;
+      p++;
+    }
+    l++;
+    if(l==3)
+    {
+      l=0;
+      cur.Kj = SecByteBlock(current_key[0], AES::DEFAULT_KEYLENGTH);
+      cur.Kl = SecByteBlock(current_key[1], AES::DEFAULT_KEYLENGTH);
+      cur.Skey = SecByteBlock(current_key[2], AES::DEFAULT_KEYLENGTH);
+      keys.push_back(cur);
+    }
+  }
+  input.close();
+}
+void GatewayApp::ReadDoctorIndices()
+{
+  fstream input;
+  input.open("DoctorIndex",fstream::in);
+  string g;
+  int p=0;
+  while(std::getline(input,g))
+  {
+    doctors_index[g] = p++;
+  }
+  input.close();
+}
 void
 GatewayApp::StartApplication (void)
 {
   
   m_running = true;
   m_packetsSent = 0;
+
+  //read from file the three keys.
+  ReadKeys();
+  ReadDoctorIndices();
+  //I read three strings.
+  //they are my kj kl and Skey
+  //I create a key_comb object with it
+  //I enter it in my keys vector
+  //I scan another file
+  //I take all the string Mid, their order is their index
   InetSocketAddress local = InetSocketAddress(Ipv4Address::GetAny(), port);
     if (listener_socket->Bind(local) == -1)
     {
       NS_FATAL_ERROR("Failed to bind socket");
     }
     NS_LOG_INFO("App started successfully");
-  listener_socket->Listen();
-  listener_socket->ShutdownSend();
-  listener_socket->SetRecvCallback(MakeCallback(&GatewayApp::RecvString, this));
-  listener_socket->SetAcceptCallback (
-     MakeNullCallback<bool, Ptr<Socket>, const Address &> (),
-     MakeCallback (&GatewayApp::HandleAccept, this));
+    listener_socket->Listen();
+    listener_socket->ShutdownSend();
+    listener_socket->SetRecvCallback(MakeCallback(&GatewayApp::RecvString, this));
+    listener_socket->SetAcceptCallback (
+      MakeNullCallback<bool, Ptr<Socket>, const Address &> (),
+      MakeCallback (&GatewayApp::HandleAccept, this));
 }
 Ptr<Socket>
  GatewayApp::GetListeningSocket (void) const
@@ -118,6 +185,16 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
   //generate Kj and Kl ans Skey
   //Encrypt hash and stuff
   //produce output. send it to doctor
+  //save the three keys of the medical professional map it with his Mid
+  AutoSeededRandomPool rnd;
+
+// Generate a random key
+  SecByteBlock Kj(0x00, AES::DEFAULT_KEYLENGTH);
+  SecByteBlock Kl(0x00, AES::DEFAULT_KEYLENGTH);
+  SecByteBlock Skey(0x00, AES::DEFAULT_KEYLENGTH);
+  rnd.GenerateBlock( Kj, Kj.size() );
+  rnd.GenerateBlock( Kl, Kl.size() );
+  rnd.GenerateBlock( Skey, Skey.size() );
 
 }
 void
