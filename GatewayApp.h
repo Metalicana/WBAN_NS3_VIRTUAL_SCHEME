@@ -59,6 +59,8 @@ private:
   Ptr<Socket> GetListeningSocket (void) const;
   void ReadKeys();
   void ReadDoctorIndices();
+  void WriteKeys(key_comb cur);
+  void WriteIndex(string g);
 
   void ScheduleTx (void);
   
@@ -68,6 +70,7 @@ private:
   Address         m_peer;
   uint32_t        m_packetSize;
   uint32_t        m_nPackets;
+  uint32_t        registered_doctor;
   DataRate        m_dataRate;
   EventId         m_sendEvent;
   bool            m_running;
