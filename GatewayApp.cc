@@ -113,15 +113,71 @@ void GatewayApp::ReadKeys()
   }
   input.close();
 }
+void GatewayApp::WriteKeys(key_comb cur)
+{
+  fstream output,input;
+  input.open("/home/radivm/Desktop/ns-allinone-3.33/ns-3.33/scratch/wban_final/DoctorKeys",fstream::in);
+  
+  string g;
+  string k="";
+  while(getline(input,g))
+  {
+    k+=g;
+    k+='\n';
+  }
+  input.close();
+  output.open("/home/radivm/Desktop/ns-allinone-3.33/ns-3.33/scratch/wban_final/DoctorKeys",fstream::out);
+  output<<k;
+  byte *h = cur.Kj.data();
+  for(int i=0;i<AES::DEFAULT_KEYLENGTH;i++)
+  {
+    output<<(int)h[i] << " ";
+  }
+  output<<endl;
+  h = cur.Kl.data();
+  for(int i=0;i<AES::DEFAULT_KEYLENGTH;i++)
+  {
+    output<<(int)h[i] << " ";
+  }
+  output<<endl;
+  h = cur.Skey.data();
+  for(int i=0;i<AES::DEFAULT_KEYLENGTH;i++)
+  {
+    output<<(int)h[i] << " ";
+  }
+  output<<endl;
+  output.close();
+  
+}
+void GatewayApp::WriteIndex(string Mid)
+{
+  fstream output,input;
+
+  input.open("/home/radivm/Desktop/ns-allinone-3.33/ns-3.33/scratch/wban_final/DoctorIndex",fstream::in);
+  
+  string g;
+  string h="";
+  while(input>>g)
+  {
+    h+=g;
+    h+='\n';
+  }
+  input.close();
+  h+=Mid;
+  output.open("/home/radivm/Desktop/ns-allinone-3.33/ns-3.33/scratch/wban_final/DoctorIndex",fstream::out);
+  output<<h<<endl;
+  output.close();
+  
+  
+}
 void GatewayApp::ReadDoctorIndices()
 {
   fstream input;
   input.open("DoctorIndex",fstream::in);
   string g;
-  int p=0;
   while(std::getline(input,g))
   {
-    doctors_index[g] = p++;
+    doctors_index[g] = registered_doctor++;
   }
   input.close();
 }
@@ -131,7 +187,7 @@ GatewayApp::StartApplication (void)
   
   m_running = true;
   m_packetsSent = 0;
-
+  registered_doctor=0;
   //read from file the three keys.
   ReadKeys();
   ReadDoctorIndices();
@@ -192,9 +248,24 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
   SecByteBlock Kj(0x00, AES::DEFAULT_KEYLENGTH);
   SecByteBlock Kl(0x00, AES::DEFAULT_KEYLENGTH);
   SecByteBlock Skey(0x00, AES::DEFAULT_KEYLENGTH);
+
   rnd.GenerateBlock( Kj, Kj.size() );
   rnd.GenerateBlock( Kl, Kl.size() );
   rnd.GenerateBlock( Skey, Skey.size() );
+
+  WriteIndex(Mid);
+  byte *g = Kj.data();
+  byte *f = Kl.data();
+  byte *h = Skey.data();
+  key_comb cur;
+  cur.Kj = SecByteBlock(g, AES::DEFAULT_KEYLENGTH);
+  cur.Kl = SecByteBlock(f, AES::DEFAULT_KEYLENGTH);
+  cur.Skey = SecByteBlock(h, AES::DEFAULT_KEYLENGTH);
+  WriteKeys(cur);
+  
+  doctors_index[Mid] = registered_doctor++;
+
+  keys.push_back(cur);
 
 }
 void
@@ -236,27 +307,27 @@ RecvString(Ptr<Socket> sock)//Callback
     InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
 
     // uint8_t data[sizeof(packet)];
-    uint8_t data[255];
+    byte data[255];
     packet->CopyData(data,sizeof(data));//Write the data in the package into data
     cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl; 
     string Mid="",PW="";
-    int mid;
-    if(data[0]>='0' && data[0]=='9')//first character is identifier
+    int mid = (int)data[0] - (int)'0';
+    cout << (int)mid << endl;
+    if(mid>= 0 && mid<= 9 )//first character is identifier
     {
-      mid = data[0]-'0';
       if(mid==DOCTOR_REGISTER)
       {
         //retrieve the Mid and PW separated by \n
         //parse it to a DoctorRegistration
-        uint32_t i=0;
-        while(data[i]=='\n')
+        uint32_t i=1;
+        while(data[i]!=(int)'\n')
         {
-          Mid+=data[i];
+          Mid+=(char)((int)data[i]);
           i++;
         }
         while(i<sizeof(data))
         {
-          PW+=data[i];
+          PW+=(char)((int)data[i]);
           i++;
         }
         DoctorRegistration(Mid,PW,address);
