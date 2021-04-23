@@ -35,6 +35,7 @@ namespace ns3
 struct key_comb
   {
     SecByteBlock Kj,Kl,Skey;
+    SecByteBlock KjBlock, KlBlock, SkeyBlock;
   };
 class GatewayApp : public Application 
 {
@@ -44,10 +45,12 @@ public:
     
   GatewayApp ();
   virtual ~GatewayApp();
-  void SendPacket ();
+  void SendPacket (Ptr<Packet> packet,Address address);
   void StartSending();
   void RecvString(Ptr<Socket> sock);
-  void Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate,uint16_t _port, uint8_t _m_id);
+  void Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, 
+  Address address, uint32_t packetSize, uint32_t nPackets, 
+  DataRate dataRate,uint16_t _port, uint8_t _m_id, uint32_t ID);
 
 private:
   void DoctorRegistration(string Mid, string PW, Address address);
@@ -62,12 +65,13 @@ private:
   void WriteKeys(key_comb cur);
   void WriteIndex(string g);
 
-  void ScheduleTx (void);
+  void ScheduleTx (Ptr<Packet> packet,Address address);
   
   
   Ptr<Socket>     speaker_socket;
   Ptr<Socket>     listener_socket;
   Address         m_peer;
+  uint32_t        ID;
   uint32_t        m_packetSize;
   uint32_t        m_nPackets;
   uint32_t        registered_doctor;
