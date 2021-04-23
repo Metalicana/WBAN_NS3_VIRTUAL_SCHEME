@@ -133,7 +133,7 @@ DoctorRegisterApp::SendPacket (Ptr<Packet> packet)
   
   speaker_socket->Bind ();
   speaker_socket->Connect(m_peer);
-  NS_LOG_INFO(speaker_socket->Send (packet));
+  speaker_socket->Send (packet);
   
   NS_LOG_INFO("Successfully sent data");
 }
@@ -142,22 +142,36 @@ RecvString(Ptr<Socket> sock)//Callback
 {
    
     Address from;
-    Ptr<Packet> packet = sock->RecvFrom (from);
-    packet->RemoveAllPacketTags ();
-    packet->RemoveAllByteTags ();
-    InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
+    Ptr<Packet> packet;
+    while( (packet = sock->RecvFrom (from)) )
+    {
+      if(packet->GetSize()==0)break;
+      packet->RemoveAllPacketTags ();
+      packet->RemoveAllByteTags ();
+      InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
 
     // uint8_t data[sizeof(packet)];
-    uint8_t data[255];
-    packet->CopyData(data,sizeof(data));//Write the data in the package into data
-    cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;  
-    
-    char a[sizeof(data)];
-    for(uint32_t i=0;i<sizeof(data);i++){
-        a[i]=data[i];
+      uint8_t data[255];
+      packet->CopyData(data,sizeof(data));//Write the data in the package into data
+      //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;  
+      int num = (int)data[0];
+      cout << "this is num " << num << endl;
+      int prev;
+      int i=1;
+      for(int q=0;q<num;q++)
+      {
+        prev = (int)data[i];
+        i++;
+        cout << prev << ": ";
+        for(int j=0;j<prev;i++,j++)
+        {
+          cout << (int)data[i] << " ";
+        }
+        cout << endl;
+        
+      }
     }
-    string strres = string(a);
-    cout<<"The received string is "<<strres<<endl;
+    
  
 }
 
