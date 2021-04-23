@@ -23,6 +23,9 @@
 #include "cryptopp/seckey.h"
 #include "cryptopp/randpool.h"
 #include "cryptopp/rdrand.h"
+#include "cryptopp/sha3.h"
+#include "cryptopp/hex.h"
+#include "cryptopp/files.h"
 
 #include "GatewayApp.h"
 
@@ -71,7 +74,9 @@ GatewayApp::~GatewayApp()
 }
 
 void
-GatewayApp::Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate,uint16_t _port, uint8_t _m_id)
+GatewayApp::Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, 
+Address address, uint32_t packetSize, uint32_t nPackets, 
+DataRate dataRate,uint16_t _port, uint8_t _m_id, uint32_t _ID)
 {
   listener_socket = _listener_socket;
   speaker_socket = _speaker_socket;
@@ -81,6 +86,7 @@ GatewayApp::Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Ad
   m_dataRate = dataRate;
   port = _port;
   m_id = _m_id;
+  ID = _ID;
 }
 void GatewayApp::ReadKeys()
 {
@@ -88,7 +94,7 @@ void GatewayApp::ReadKeys()
   input.open("DoctorKeys",fstream::in);
   string g;
   int l =0,x,p=0;
-  byte *current_key[3];
+  byte *current_key[6];
   key_comb cur;
   while(std::getline(input,g))
   {
@@ -102,12 +108,15 @@ void GatewayApp::ReadKeys()
       p++;
     }
     l++;
-    if(l==3)
+    if(l==6)
     {
       l=0;
       cur.Kj = SecByteBlock(current_key[0], AES::DEFAULT_KEYLENGTH);
       cur.Kl = SecByteBlock(current_key[1], AES::DEFAULT_KEYLENGTH);
       cur.Skey = SecByteBlock(current_key[2], AES::DEFAULT_KEYLENGTH);
+      cur.KjBlock = SecByteBlock(current_key[3], AES::BLOCKSIZE);
+      cur.KlBlock = SecByteBlock(current_key[4], AES::BLOCKSIZE);
+      cur.SkeyBlock = SecByteBlock(current_key[5], AES::BLOCKSIZE);
       keys.push_back(cur);
     }
   }
@@ -128,24 +137,24 @@ void GatewayApp::WriteKeys(key_comb cur)
   input.close();
   output.open("/home/radivm/Desktop/ns-allinone-3.33/ns-3.33/scratch/wban_final/DoctorKeys",fstream::out);
   output<<k;
-  byte *h = cur.Kj.data();
-  for(int i=0;i<AES::DEFAULT_KEYLENGTH;i++)
+  byte *h[6];
+  h[0] = cur.Kj.data();
+  h[1] = cur.Kl.data();
+  h[2] = cur.Skey.data();
+  h[3] = cur.KjBlock.data();
+  h[4] = cur.KlBlock.data();
+  h[5] = cur.SkeyBlock.data();
+  for(int q=0;q<6;q++)
   {
-    output<<(int)h[i] << " ";
+    int j;
+    if(q<3)j=AES::DEFAULT_KEYLENGTH;
+    else j = AES::BLOCKSIZE;
+    for(int i=0; i < j ; i++)
+    {
+      output<<(int)h[q][i] << " ";
+    }
+     output<<endl;
   }
-  output<<endl;
-  h = cur.Kl.data();
-  for(int i=0;i<AES::DEFAULT_KEYLENGTH;i++)
-  {
-    output<<(int)h[i] << " ";
-  }
-  output<<endl;
-  h = cur.Skey.data();
-  for(int i=0;i<AES::DEFAULT_KEYLENGTH;i++)
-  {
-    output<<(int)h[i] << " ";
-  }
-  output<<endl;
   output.close();
   
 }
@@ -248,24 +257,112 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
   SecByteBlock Kj(0x00, AES::DEFAULT_KEYLENGTH);
   SecByteBlock Kl(0x00, AES::DEFAULT_KEYLENGTH);
   SecByteBlock Skey(0x00, AES::DEFAULT_KEYLENGTH);
+  SecByteBlock KjBlock(AES::BLOCKSIZE);
+  SecByteBlock KlBlock(AES::BLOCKSIZE);
+  SecByteBlock SkeyBlock(AES::BLOCKSIZE);
 
   rnd.GenerateBlock( Kj, Kj.size() );
   rnd.GenerateBlock( Kl, Kl.size() );
   rnd.GenerateBlock( Skey, Skey.size() );
 
+  rnd.GenerateBlock( KjBlock, KjBlock.size() );
+  rnd.GenerateBlock( KlBlock, KlBlock.size() );
+  rnd.GenerateBlock( SkeyBlock, SkeyBlock.size() );
+
   WriteIndex(Mid);
-  byte *g = Kj.data();
-  byte *f = Kl.data();
-  byte *h = Skey.data();
   key_comb cur;
-  cur.Kj = SecByteBlock(g, AES::DEFAULT_KEYLENGTH);
-  cur.Kl = SecByteBlock(f, AES::DEFAULT_KEYLENGTH);
-  cur.Skey = SecByteBlock(h, AES::DEFAULT_KEYLENGTH);
+  cur.Kj = SecByteBlock(Kj.data(), AES::DEFAULT_KEYLENGTH);
+  cur.Kl = SecByteBlock(Kl.data(), AES::DEFAULT_KEYLENGTH);
+  cur.Skey = SecByteBlock(Skey.data(), AES::DEFAULT_KEYLENGTH);
+  cur.KjBlock = SecByteBlock(KjBlock.data(), AES::BLOCKSIZE);
+  cur.KlBlock = SecByteBlock(KlBlock.data(), AES::BLOCKSIZE);
+  cur.SkeyBlock = SecByteBlock(SkeyBlock.data(), AES::BLOCKSIZE);
+
   WriteKeys(cur);
   
   doctors_index[Mid] = registered_doctor++;
 
   keys.push_back(cur);
+  //here we do the encryption and stuff
+  //we concat the ID string 
+  string IDgw = "";
+  uint32_t temp = ID;
+  if(temp == 0)IDgw+='0';
+  while(temp!=0)
+  {
+    IDgw+=(char)(temp%10+'0');
+    temp/=10;
+  }
+  reverse(IDgw.begin(),IDgw.end());
+  string cc = Mid + IDgw;
+  byte plainText[(int)cc.size()+1];
+  for(int i=0;i<(int)cc.size();i++)
+  {
+    plainText[i] = (byte)cc[i];
+  }
+  plainText[cc.size()]=0;
+  CFB_Mode<AES>::Encryption cfbEncryption(Kj, Kj.size(), KjBlock);
+  cfbEncryption.ProcessData(plainText, plainText, (size_t)((int)cc.size()+1) );
+
+  HexEncoder encoder(new FileSink(std::cout));
+
+  std::string digest1,digest2,digest3;
+
+  SHA3_256 hash;
+  hash.Update((const byte*)Mid.data(), Mid.size());
+  digest1.resize(hash.DigestSize());
+  hash.Final((byte*)&digest1[0]);
+
+  hash.Update((const byte*)PW.data(), PW.size());
+  digest2.resize(hash.DigestSize());
+  hash.Final((byte*)&digest2[0]);
+
+  hash.Update((const byte*)Skey.data(), Skey.size());
+  digest3.resize(hash.DigestSize());
+  hash.Final((byte*)&digest3[0]);
+
+  byte hash_string[(int)digest1.size()];
+  for(int i=0;i<(int)digest1.size();i++)
+  {
+    hash_string[i] = (byte)(digest1[i]^digest2[i]^digest3[i]);
+  }
+
+  //we need to send hash_string
+  //we need to send  plainText
+
+  
+  uint8_t buff[3*AES::DEFAULT_KEYLENGTH + 2*AES::BLOCKSIZE + 32 + cc.size()+8];
+  buff[0]=(byte)7;
+  buff[1]=(byte)((int)cc.size());
+  int j=2;
+  int i;
+
+  for(i=0;i<(int)cc.size();i++)buff[j++]=plainText[i];
+
+  buff[j++]=(byte)32;
+  NS_LOG_INFO(TEAL_CODE<<buff[j-1]<<END_CODE);
+  for(i=0;i<32;i++)buff[j++]=hash_string[i];
+
+  buff[j++]=(byte)AES::DEFAULT_KEYLENGTH;
+  for(i=0;i<AES::DEFAULT_KEYLENGTH;i++)buff[j++]=Skey[i];
+
+  buff[j++]=(byte)AES::DEFAULT_KEYLENGTH;
+  for(i=0;i<AES::DEFAULT_KEYLENGTH;i++)buff[j++]=SkeyBlock[i];
+
+  buff[j++]=(byte)AES::DEFAULT_KEYLENGTH;
+  for(i=0;i<AES::DEFAULT_KEYLENGTH;i++)buff[j++]=Kj[i];
+
+  buff[j++]=(byte)AES::BLOCKSIZE;
+  for(i=0;i<AES::BLOCKSIZE;i++)buff[j++]=KjBlock[i];
+
+  buff[j++]=(byte)AES::DEFAULT_KEYLENGTH;
+  for(i=0;i<AES::DEFAULT_KEYLENGTH;i++)buff[j++]=Kl[i];
+
+  buff[j++]=(byte)AES::BLOCKSIZE;
+  for(i=0;i<AES::BLOCKSIZE;i++)buff[j++]=KlBlock[i];
+  Ptr<Packet> packet = Create<Packet>(buff,j);
+  
+  SendPacket(packet, address);
 
 }
 void
@@ -277,22 +374,19 @@ GatewayApp::HandleRead(Ptr<Socket> socket)
     Address localAddress;
     while ((packet = socket->RecvFrom(from)))
     {
-      
       NS_LOG_INFO(TEAL_CODE << "HandleReadOne : Received a Packet of size: " << packet->GetSize() << " at time " << Now().GetSeconds() << END_CODE);
       NS_LOG_INFO(packet->ToString());
     }
   }
   
 void 
-GatewayApp::SendPacket ()
+GatewayApp::SendPacket (Ptr<Packet> packet, Address address)
 {
   
-  Ptr<Packet> packet = Create<Packet>();
-  packet = packetize("This is a test message please print me");
 
   speaker_socket->Bind ();
-  speaker_socket->Connect(m_peer);
-  NS_LOG_INFO(speaker_socket->Send (packet));
+  speaker_socket->Connect(address);
+  speaker_socket->Send (packet);
   
   NS_LOG_INFO("Successfully sent data");
 }
@@ -301,18 +395,19 @@ RecvString(Ptr<Socket> sock)//Callback
 {
    
     Address from;
-    Ptr<Packet> packet = sock->RecvFrom (from);
-    packet->RemoveAllPacketTags ();
+    Ptr<Packet> packet;
+    while(packet = sock->RecvFrom (from))
+    {
+      packet->RemoveAllPacketTags ();
     packet->RemoveAllByteTags ();
     InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
-
     // uint8_t data[sizeof(packet)];
     byte data[255];
     packet->CopyData(data,sizeof(data));//Write the data in the package into data
-    cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl; 
+    cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<< address.GetIpv4 ()<< endl;
+    Address ad = InetSocketAddress(address.GetIpv4(),port);
     string Mid="",PW="";
     int mid = (int)data[0] - (int)'0';
-    cout << (int)mid << endl;
     if(mid>= 0 && mid<= 9 )//first character is identifier
     {
       if(mid==DOCTOR_REGISTER)
@@ -325,43 +420,44 @@ RecvString(Ptr<Socket> sock)//Callback
           Mid+=(char)((int)data[i]);
           i++;
         }
-        while(i<sizeof(data))
+        i++;
+        while(data[i]!=0)
         {
           PW+=(char)((int)data[i]);
           i++;
         }
-        DoctorRegistration(Mid,PW,address);
+        DoctorRegistration(Mid,PW,ad);
       }
     }
     char a[sizeof(data)];
     for(uint32_t i=0;i<sizeof(data);i++){
         a[i]=data[i];
+      }
+      string strres = string(a);
     }
-    string strres = string(a);
-    cout<<"The received string is "<<strres<<endl;
-
-
- 
 }
 
 void GatewayApp::HandleAccept (Ptr<Socket> s, const Address& from)
  {
+   
    s->SetRecvCallback (MakeCallback (&GatewayApp::RecvString, this));
    m_socketList.push_back (s);
  }
 void 
-GatewayApp::ScheduleTx (void)
+GatewayApp::ScheduleTx (Ptr<Packet> packet, Address address)
 {
   
   if (m_running)
     {
       Time tNext (Seconds (m_packetSize * 8 / static_cast<double> (m_dataRate.GetBitRate ()))+ Seconds(2));
-      m_sendEvent = Simulator::Schedule (tNext, &GatewayApp::SendPacket, this);
+      m_sendEvent = Simulator::Schedule (tNext, &GatewayApp::SendPacket,this,packet,address);
     }
 }
 void GatewayApp::StartSending()
 {
-  m_sendEvent = Simulator::Schedule (Seconds(1.01), &GatewayApp::SendPacket,this);
+  /*Ptr<Packet> packet = Create<Packet>();
+  Address address("10.1.1.0");
+  m_sendEvent = Simulator::Schedule (Seconds(1.01), &GatewayApp::SendPacket,this,packet,address);*/
 }
 Ptr<Packet> GatewayApp:: packetize (string str)
 { 
