@@ -10,6 +10,7 @@
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
+#include "ns3/inet-socket-address.h"
 #include "DoctorRegisterApp.h"
 
 using namespace ns3;
@@ -77,7 +78,7 @@ DoctorRegisterApp::StartApplication (void)
     {
       NS_FATAL_ERROR("Failed to bind socket");
     }
-    NS_LOG_INFO("App started successfully");
+    NS_LOG_INFO(RED_CODE<<"Doctor app started successfully"<<END_CODE);
   listener_socket->Listen();
   listener_socket->ShutdownSend();
   listener_socket->SetRecvCallback(MakeCallback(&DoctorRegisterApp::RecvString, this));
@@ -97,12 +98,12 @@ DoctorRegisterApp::StopApplication (void)
 {
   m_running = false;
 
-  if (m_sendEvent.IsRunning ())
+  if(m_sendEvent.IsRunning ())
     {
       Simulator::Cancel (m_sendEvent);
     }
 
- if (listener_socket)
+  if(listener_socket)
     {
       listener_socket->Close ();
     }
@@ -110,6 +111,11 @@ DoctorRegisterApp::StopApplication (void)
     {
         speaker_socket->Close();
     }
+  for(auto x : m_socketList)
+  {
+    x->Close();
+  }
+  m_socketList.clear();
 }
 
 void
@@ -133,9 +139,23 @@ DoctorRegisterApp::SendPacket (Ptr<Packet> packet)
   
   speaker_socket->Bind ();
   speaker_socket->Connect(m_peer);
-  speaker_socket->Send (packet);
+  speaker_socket->Send(packet);
+  
   
   NS_LOG_INFO("Successfully sent data");
+}
+void DoctorRegisterApp::SendRegisterInfo(string Mid, string PW, Address add)
+{
+  char x = (char)(DOCTOR_REGISTER + '0');
+  string g = x + Mid  + '\n' + PW;
+  cout << "this is the string " << g << endl;
+  Ptr<Packet> p = packetize(g);
+  speaker_socket->Bind ();
+  speaker_socket->Connect(add);
+  
+  speaker_socket->Send (p);
+  NS_LOG_INFO(BLUE_CODE << "Successfully sent Mid and PW to GW" << END_CODE);
+
 }
 void DoctorRegisterApp::
 RecvString(Ptr<Socket> sock)//Callback
@@ -149,13 +169,12 @@ RecvString(Ptr<Socket> sock)//Callback
       packet->RemoveAllPacketTags ();
       packet->RemoveAllByteTags ();
       InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
-
-    // uint8_t data[sizeof(packet)];
+      NS_LOG_INFO(RED_CODE<<"Incoming information from Gateway"<<END_CODE);
+      //uint8_t data[sizeof(packet)];
       uint8_t data[255];
       packet->CopyData(data,sizeof(data));//Write the data in the package into data
       //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;  
       int num = (int)data[0];
-      cout << "this is num " << num << endl;
       int prev;
       int i=1;
       for(int q=0;q<num;q++)
@@ -192,8 +211,7 @@ DoctorRegisterApp::ScheduleTx (void)
 }
 void DoctorRegisterApp::StartSending(string g)
 {
-  Ptr<Packet> packet = Create<Packet>();
-  packet = packetize(g);
+  Ptr<Packet>packet = packetize(g);
   m_sendEvent = Simulator::Schedule (Seconds(1.01), &DoctorRegisterApp::SendPacket,this,packet);
 }
 Ptr<Packet> DoctorRegisterApp:: packetize (string str)
