@@ -28,6 +28,7 @@ public:
   void SendPacket (Ptr<Packet> packet);
   void StartSending(string g);
   void RecvString(Ptr<Socket> sock);
+  void SendRegisterInfo(string Mid, string PW, Address add);
   void Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate,uint16_t _port, uint8_t _m_id);
 
 private:
