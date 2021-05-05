@@ -190,6 +190,10 @@ void GatewayApp::ReadDoctorIndices()
   }
   input.close();
 }
+uint32_t GatewayApp:: GetID()
+{
+  return ID;
+}
 void
 GatewayApp::StartApplication (void)
 {
@@ -211,7 +215,7 @@ GatewayApp::StartApplication (void)
     {
       NS_FATAL_ERROR("Failed to bind socket");
     }
-    NS_LOG_INFO("App started successfully");
+    NS_LOG_INFO(TEAL_CODE<<"Server started successfully"<<END_CODE);
     listener_socket->Listen();
     listener_socket->ShutdownSend();
     listener_socket->SetRecvCallback(MakeCallback(&GatewayApp::RecvString, this));
@@ -244,6 +248,11 @@ GatewayApp::StopApplication (void)
     {
         speaker_socket->Close();
     }
+  for(auto x : m_socketList)
+  {
+    x->Close();
+  }
+  m_socketList.clear();
 }
 void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
 {
@@ -382,10 +391,9 @@ GatewayApp::HandleRead(Ptr<Socket> socket)
 void 
 GatewayApp::SendPacket (Ptr<Packet> packet, Address address)
 {
-  
-
   speaker_socket->Bind ();
   speaker_socket->Connect(address);
+  
   speaker_socket->Send (packet);
   
   NS_LOG_INFO("Successfully sent data");
@@ -407,13 +415,14 @@ RecvString(Ptr<Socket> sock)//Callback
     cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<< address.GetIpv4 ()<< endl;
     Address ad = InetSocketAddress(address.GetIpv4(),port);
     string Mid="",PW="";
-    int mid = (int)data[0] - (int)'0';
+    int mid = (int)data[0] -(int)'0';
     if(mid>= 0 && mid<= 9 )//first character is identifier
     {
       if(mid==DOCTOR_REGISTER)
       {
         //retrieve the Mid and PW separated by \n
         //parse it to a DoctorRegistration
+        NS_LOG_INFO(YELLOW_CODE<<"Incoming doctor register request" << END_CODE);
         uint32_t i=1;
         while(data[i]!=(int)'\n')
         {
@@ -426,6 +435,7 @@ RecvString(Ptr<Socket> sock)//Callback
           PW+=(char)((int)data[i]);
           i++;
         }
+        NS_LOG_INFO(PURPLE_CODE<<"Mid: " << Mid << ", " << "PW: " << PW << END_CODE);
         DoctorRegistration(Mid,PW,ad);
       }
     }
