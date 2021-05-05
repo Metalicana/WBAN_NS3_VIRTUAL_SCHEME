@@ -51,6 +51,7 @@ public:
   void Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, 
   Address address, uint32_t packetSize, uint32_t nPackets, 
   DataRate dataRate,uint16_t _port, uint8_t _m_id, uint32_t ID);
+  uint32_t GetID();
 
 private:
   void DoctorRegistration(string Mid, string PW, Address address);
