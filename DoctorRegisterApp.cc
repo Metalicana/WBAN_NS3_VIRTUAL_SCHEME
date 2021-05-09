@@ -148,12 +148,12 @@ void DoctorRegisterApp::SendRegisterInfo(string Mid, string PW, Address add)
 {
   char x = (char)(DOCTOR_REGISTER + '0');
   string g = x + Mid  + '\n' + PW;
-  cout << "this is the string " << g << endl;
   Ptr<Packet> p = packetize(g);
   speaker_socket->Bind ();
   speaker_socket->Connect(add);
   
   speaker_socket->Send (p);
+  speaker_socket->ShutdownSend();
   NS_LOG_INFO(BLUE_CODE << "Successfully sent Mid and PW to GW" << END_CODE);
 
 }
@@ -165,6 +165,7 @@ RecvString(Ptr<Socket> sock)//Callback
     Ptr<Packet> packet;
     while( (packet = sock->RecvFrom (from)) )
     {
+      NS_LOG_INFO(YELLOW_CODE << "CODE RECEIVED AT " << Now().GetSeconds() << END_CODE);
       if(packet->GetSize()==0)break;
       packet->RemoveAllPacketTags ();
       packet->RemoveAllByteTags ();
