@@ -10,6 +10,7 @@
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
+
 #include "PhoneApp.h"
 
 using namespace ns3;
@@ -29,6 +30,7 @@ using namespace std;
 #define DOCTOR_REGISTER 5
 #define GATEWAY 6
 #define PATIENT 7
+#define SENSOR 8
 
 namespace ns3
 {
@@ -78,7 +80,7 @@ PhoneApp::StartApplication (void)
     {
       NS_FATAL_ERROR("Failed to bind socket");
     }
-    NS_LOG_INFO(RED_CODE<<"App started successfully"<<END_CODE);
+    NS_LOG_INFO(RED_CODE<<"Phone started successfully"<<END_CODE);
   listener_socket->Listen();
   listener_socket->ShutdownSend();
   listener_socket->SetRecvCallback(MakeCallback(&PhoneApp::RecvString, this));
@@ -92,7 +94,10 @@ Ptr<Socket>
    NS_LOG_FUNCTION (this);
    return listener_socket;
  }
- 
+byte* PhoneApp::GetUi()
+{
+  return ui;
+}
 void 
 PhoneApp::StopApplication (void)
 {
@@ -166,7 +171,7 @@ RecvString(Ptr<Socket> sock)//Callback
       packet->RemoveAllPacketTags ();
       packet->RemoveAllByteTags ();
       InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
-      NS_LOG_INFO(RED_CODE<<"Incoming information from Gateway"<<END_CODE);
+      NS_LOG_INFO(RED_CODE<<"Incoming information from Gateway for Phone"<<END_CODE);
     // uint8_t data[sizeof(packet)];
       uint8_t data[255];
       packet->CopyData(data,sizeof(data));//Write the data in the package into data
@@ -182,6 +187,7 @@ RecvString(Ptr<Socket> sock)//Callback
         for(int j=0;j<prev;i++,j++)
         {
           cout << (int)data[i] << " ";
+          if(q==0)ui[j]=data[i];
         }
         cout << endl;
         
@@ -190,7 +196,14 @@ RecvString(Ptr<Socket> sock)//Callback
     
  
 }
-
+void PhoneApp::SendPing()
+{
+  //Method to send Patient packet to GW
+  string s ="";
+  s += (char)(PATIENT + '0');
+  Ptr<Packet> p = packetize(s);
+  SendPacket(p);
+}
 void PhoneApp::HandleAccept (Ptr<Socket> s, const Address& from)
  {
    s->SetRecvCallback (MakeCallback (&PhoneApp::RecvString, this));
