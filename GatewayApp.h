@@ -45,6 +45,7 @@ public:
     
   GatewayApp ();
   virtual ~GatewayApp();
+  void PatientRegister(Address add);
   void SendPacket (Ptr<Packet> packet,Address address);
   void StartSending();
   void RecvString(Ptr<Socket> sock);
@@ -65,6 +66,7 @@ private:
   void ReadDoctorIndices();
   void WriteKeys(key_comb cur);
   void WriteIndex(string g);
+  void SensorRegister(string peer, Address add);
 
   void ScheduleTx (Ptr<Packet> packet,Address address);
   
@@ -81,9 +83,12 @@ private:
   bool            m_running;
   uint32_t        m_packetsSent;
   uint16_t        port;
-  std::list<Ptr<Socket> > m_socketList; 
+  std::list<Ptr<Socket> > m_socketList;
+  vector <Ptr<Socket> > m_speakers;
   uint8_t         m_id;
   map<string,int> doctors_index;
+  map<string, bool> doctor_exist;
+  map<string, Address> peer_address;
   vector<key_comb> keys; 
 };
 }
