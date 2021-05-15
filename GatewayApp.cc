@@ -43,6 +43,7 @@ using namespace std;
 #define BOLD_CODE "\033[1m"
 #define END_CODE "\033[0m"
 
+#define DOCTOR_LOGIN 4
 #define DOCTOR_REGISTER 5
 #define GATEWAY 6
 #define PATIENT 7
@@ -156,6 +157,7 @@ void GatewayApp::WriteKeys(key_comb cur)
   h[0] = cur.Kj.data();
   h[1] = cur.Kl.data();
   h[2] = cur.Skey.data();
+  
   h[3] = cur.KjBlock.data();
   h[4] = cur.KlBlock.data();
   h[5] = cur.SkeyBlock.data();
@@ -303,7 +305,7 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
 
   //WriteKeys(cur);
   
-  doctors_index[Mid] = registered_doctor++;
+  
   doctor_exist[Mid] = true;
 
   keys.push_back(cur);
@@ -328,6 +330,11 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
   plainText[cc.size()]=0;
   CFB_Mode<AES>::Encryption cfbEncryption(Kj, Kj.size(), KjBlock);
   cfbEncryption.ProcessData(plainText, plainText, (size_t)((int)cc.size()+1) );
+
+  string C="";
+  for(int i=0;i<cc.size();i++)C+=plainText[i];
+  doctors_index[C] = registered_doctor++;
+  //for(int q=0;q<6;q++)cout << (int)plainText[q] << endl;
 
   HexEncoder encoder(new FileSink(std::cout));
 
@@ -357,7 +364,7 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
 
   
   uint8_t buff[3*AES::DEFAULT_KEYLENGTH + 2*AES::BLOCKSIZE + 32 + cc.size()+8];
-  buff[0]=(byte)7;
+  buff[0]=(byte)8;
   buff[1]=(byte)((int)cc.size());
   int j=2;
   int i;
@@ -458,11 +465,66 @@ RecvString(Ptr<Socket> sock)//Callback
           NS_LOG_INFO(PURPLE_CODE<<"Mid: " << Mid << ", " << "PW: " << PW << END_CODE);
           DoctorRegistration(Mid,PW,ad);
         }
+        else if(mid == DOCTOR_LOGIN)
+        {
+          //Doctor needs to decode CIDi
+          NS_LOG_INFO(BLUE_CODE<< "Incoming Login request from doctor" << END_CODE);
+          byte CIDi[100];
+          byte C[10];
+          byte TT[100];
+          int CIDisz,Csz,TTsz;
+          int i=2;
+          int cnt = data[1];
+          //cout << cnt << " --\n";
+          int val;
+          for(int q=0;q<cnt;q++)
+          {
+            val = data[i++];
+            if(q==0)CIDisz=val;
+            else if(q==1)Csz=val;
+            else TTsz=val;
+            //cout << val <<": ";
+            for(int j=0;j<val;j++,i++)
+            {
+              if(q==0)CIDi[j]=data[i];
+              else if(q==1)C[j]=data[i];
+              else TT[j]=data[i];
+            }
+          }
+          string CS="";
+          for(int q=0;q<6;q++)CS+=(char)(int)C[q];
+          //for(int q=0;q<6;q++)cout << (int)CS[q] << " ";
+          //cout << endl;
+          
+          int idx = doctors_index[CS];
+          key_comb chabi = keys[idx];
+          CIDi[CIDisz]=0;
+          //find KL!
+          CFB_Mode<AES>::Decryption dc(chabi.Kl, chabi.Kl.size(), chabi.KlBlock);
+          dc.ProcessData(CIDi, CIDi, (size_t)(CIDisz+1) );
+          /*for(int q=CIDisz+Csz+5,s=0;s<TTsz;s++,q++)
+          {
+            if((int)data[q] != )
+            
+          }*/
+          i=0;
+          for(int q=0;q<5;q++)
+          {
+            if(q==0)val=32;
+            else if(q>0&&q<4)val=16;
+            else val=TTsz,i++;
+            for(int s=0;s<val;s++,i++)cout<< (int)CIDi[i] << " ";
+            cout << endl;
+          }
+
+        }
         else if(mid == PATIENT)
         {
           //Call a method called patient register that generates a Ui or an ID STRING 
           //Generate Kgw_u = the hash of the id and ui
           //save the IP and Ui and Kgw_u in maps
+          
+
           PatientRegister(ad);
 
         }
@@ -543,11 +605,12 @@ void GatewayApp::SensorRegister(string peer, Address add)
   buff[i]='\0';
   Ptr<Packet> p = Create<Packet>(buff,i);
   Ptr<Socket> speak = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
- // Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
-  SendPacket(p,add);
-  /*speak2->Bind();
+  Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
+  //SendPacket(p,add);
+  speak2->Bind();
   speak2->Connect(add);
-  speak2->Send(p);*/
+  speak2->Send(p);
+  
   speak->Bind();
   speak->Connect(peer_address[peer]);
 
