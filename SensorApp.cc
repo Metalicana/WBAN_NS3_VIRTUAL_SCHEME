@@ -86,7 +86,6 @@ SensorApp::StartApplication (void)
   {
     NS_FATAL_ERROR("Failed to bind socket");
   }
-  NS_LOG_INFO(RED_CODE << "OH NO IDK WHAT TO DO ANYMORE HAHA" << END_CODE);
   NS_LOG_INFO(RED_CODE<<"Sensor started successfully"<<END_CODE);
   listener_socket->Listen();
   listener_socket->ShutdownSend();
@@ -101,7 +100,20 @@ Ptr<Socket>
    NS_LOG_FUNCTION (this);
    return listener_socket;
  }
- 
+
+byte * SensorApp:: GetUi()
+{
+  
+  return Ui;
+}
+byte * SensorApp::GetSNj()
+{
+  return SNj;
+}
+byte * SensorApp::GetKUSNj()
+{
+  return KUSNj;
+}
 void 
 SensorApp::StopApplication (void)
 {
@@ -175,7 +187,7 @@ RecvString(Ptr<Socket> sock)//Callback
       packet->RemoveAllPacketTags ();
       packet->RemoveAllByteTags ();
       InetSocketAddress address = InetSocketAddress::ConvertFrom (from);
-      NS_LOG_INFO(RED_CODE<<"Incoming information from Gateway for sensor"<<END_CODE);
+      NS_LOG_INFO(RED_CODE<<"Incoming information from Gateway for sensor at " << Simulator::Now()<<END_CODE);
     // uint8_t data[sizeof(packet)];
       uint8_t data[255];
       packet->CopyData(data,sizeof(data));//Write the data in the package into data
@@ -187,18 +199,31 @@ RecvString(Ptr<Socket> sock)//Callback
       {
         prev = (int)data[i];
         i++;
-        cout << prev << ": ";
+        //cout << prev << ": ";
         for(int j=0;j<prev;i++,j++)
         {
-          cout << (int)data[i] << " ";
+          if(q==0)
+          {
+            Ui[j]=data[i];
+          }
+          else if(q== 1)
+          {
+            SNj[j]=data[i];
+          }
+          else if(q == 2)
+          {
+            KUSNj[j] = data[i];
+          }
+         // cout << (int)data[i] << " ";
         }
-        cout << endl;
+        //cout << endl;
         
       }
     }
     
  
 }
+
 void SensorApp::SendPing(byte a[])
 {
   byte buff[17];
