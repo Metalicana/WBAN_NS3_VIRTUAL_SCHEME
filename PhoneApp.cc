@@ -96,7 +96,7 @@ Ptr<Socket>
  }
 byte* PhoneApp::GetUi()
 {
-  return ui;
+  return Ui;
 }
 void 
 PhoneApp::StopApplication (void)
@@ -183,13 +183,14 @@ RecvString(Ptr<Socket> sock)//Callback
       {
         prev = (int)data[i];
         i++;
-        cout << prev << ": ";
+        //cout << prev << ": ";
         for(int j=0;j<prev;i++,j++)
         {
-          cout << (int)data[i] << " ";
-          if(q==0)ui[j]=data[i];
+          //cout << (int)data[i] << " ";
+          if(q==0)Ui[j]=data[i];
+          else if(q==1)KGWU[j]=data[i];
         }
-        cout << endl;
+        //cout << endl;
         
       }
     }
