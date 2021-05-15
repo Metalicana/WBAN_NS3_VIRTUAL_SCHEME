@@ -42,7 +42,12 @@ public:
   void RecvString(Ptr<Socket> sock);
   void SendRegisterInfo(string Mid, string PW, Address add);
   void SetBuff(byte *a);
-  void Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate,uint16_t _port, uint8_t _m_id);
+  void Setup (Ptr<Socket> _speaker_socket, Ptr<Socket> _listener_socket, Address address,
+   uint32_t packetSize, uint32_t nPackets,
+    DataRate dataRate,uint16_t _port, uint8_t _m_id);
+  byte* GetUi();
+  byte* GetSNj();
+  byte* GetKUSNj();
 
 private:
   virtual void StartApplication (void);
@@ -68,6 +73,10 @@ private:
   std::list<Ptr<Socket> > m_socketList; 
   uint8_t         m_id;
   byte            buff[32];
+  byte            SNj[16];
+  byte            KUSNj[32];
+  byte            Ui[16];
+
 };
 
 }
