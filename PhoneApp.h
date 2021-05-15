@@ -67,7 +67,8 @@ private:
   uint16_t        port;
   std::list<Ptr<Socket> > m_socketList; 
   uint8_t         m_id;
-  byte            ui[16];
+  byte            Ui[16];
+  byte            KGWU[32];            
 };
 
 }
