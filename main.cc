@@ -41,6 +41,13 @@ void init( Ptr<SensorApp> s,Ptr<PhoneApp> p)
   //get the Ui
   byte *buff = p->GetUi();
   s->SendPing(buff);
+  cout << "HUHU\n";
+}
+void bro(Ptr<SensorApp> sens)
+{
+  byte *buff = sens->GetSNj();
+  for(int q=0;q<16;q++)cout << buff[q] << "~";
+  cout << endl;
 }
 int 
 main (int argc, char *argv[])
@@ -196,10 +203,13 @@ main (int argc, char *argv[])
   Simulator::Schedule (Seconds (4), &DoctorRegisterApp::SendRegisterInfo, doctor_app[1], "2000" , "abcde", gwAddress[1]);
   Simulator::Schedule (Seconds (5), &DoctorRegisterApp::SendRegisterInfo, doctor_app[2], "3000" , "abcde", gwAddress[2]);
 
+ 
+
 
   Simulator::Schedule (Seconds (6), &PhoneApp::SendPing, phone_app[0]);
   Simulator::Schedule (Seconds (7), &PhoneApp::SendPing, phone_app[1]);
   Simulator::Schedule (Seconds (8), &PhoneApp::SendPing, phone_app[2]);
+
   byte *buff;
   for(i=0;i<patientNodeCnt;i++)
   {
@@ -207,10 +217,13 @@ main (int argc, char *argv[])
     {
       //sensor node will ping the server with UI of the patient
       //server will handle it
-      
-      Simulator::Schedule (Seconds (10.0 + (double)(j+0.25)), &init, sensor_app[i*patientNodeCnt+j], phone_app[i]);
+      Simulator::Schedule (Seconds (9.0 + (double)(j+0.025)), &init, sensor_app[i*patientNodeCnt+j], phone_app[i]);
     }
   }
+  Simulator::Schedule (Seconds (14), &bro, sensor_app[0]);
+  Simulator::Schedule (Seconds (15), &DoctorRegisterApp::SendLoginInfo, doctor_app[0], "1000" , "abcde", gwAddress[0], phone_app[0], sensor_app[2]);
+  //Simulator::Schedule (Seconds (16), &DoctorRegisterApp::SendLoginInfo, doctor_app[1], "2000" , "abcde", gwAddress[1], phone_app[0], sensor_app[1]);
+  //Simulator::Schedule (Seconds (17), &DoctorRegisterApp::SendLoginInfo, doctor_app[2], "3000" , "abcde", gwAddress[2], phone_app[0], sensor_app[2]);
   /*byte *buff;
   byte temp[16];
   for(i=0;i<patientNodeCnt;i++)
