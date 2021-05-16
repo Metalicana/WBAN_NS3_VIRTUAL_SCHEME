@@ -2,6 +2,8 @@
 #define NS3_PHONE_APP_H
 
 #include <fstream>
+#include <map>
+#include <vector>
 #include "ns3/log.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -26,6 +28,7 @@
 
 using namespace std;
 using namespace ns3;
+using namespace CryptoPP;
 namespace ns3
 {
   class PhoneApp : public Application 
@@ -37,6 +40,7 @@ public:
   PhoneApp ();
   virtual ~PhoneApp();
   void SendPing();
+  void UpdateSensor(Address ad);
   void SendPacket (Ptr<Packet> packet);
   void StartSending(string g);
   void RecvString(Ptr<Socket> sock);
@@ -68,7 +72,12 @@ private:
   std::list<Ptr<Socket> > m_socketList; 
   uint8_t         m_id;
   byte            Ui[16];
-  byte            KGWU[32];            
+  byte            KGWU[32];   
+  byte            SNj[16];
+  byte            KUSNj[32];
+  map<string,int> sensor_idx;  
+  int             sensor_cnt;
+  vector<Address> sensor_address;    
 };
 
 }
