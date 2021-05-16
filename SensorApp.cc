@@ -1,5 +1,8 @@
 
 #include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
 #include "ns3/log.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -10,6 +13,17 @@
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
+#include "cryptopp/aes.h"
+#include "cryptopp/default.h"
+#include "cryptopp/osrng.h"
+#include "cryptopp/modes.h"
+#include "cryptopp/cryptlib.h"
+#include "cryptopp/seckey.h"
+#include "cryptopp/randpool.h"
+#include "cryptopp/rdrand.h"
+#include "cryptopp/sha3.h"
+#include "cryptopp/hex.h"
+#include "cryptopp/files.h"
 
 #include "SensorApp.h"
 
@@ -27,6 +41,7 @@ using namespace std;
 #define BOLD_CODE "\033[1m"
 #define END_CODE "\033[0m"
 
+#define SENSOR_SKEY 3
 #define DOCTOR_REGISTER 5
 #define GATEWAY 6
 #define PATIENT 7
@@ -226,34 +241,145 @@ RecvString(Ptr<Socket> sock)//Callback
       }
       else
       {
-         NS_LOG_INFO("THIS IS BY THE PHONE");
+        NS_LOG_INFO("THIS IS BY THE PHONE");
+        byte Vip[1000];
+        byte TT[100];
+
+        int totalsz;
+        int TTsz;
+        i=2;
         for(int q=0;q<num;q++)
         {
           prev = (int)data[i];
+          if(q==0)totalsz=prev;
+          else TTsz=prev;
           i++;
-          cout << prev << ": ";
+         // cout << prev <<": ";
           for(int j=0;j<prev;i++,j++)
           {
-            if(q==0)
-            {
-              //Ui[j]=data[i];
-            }
-            else if(q== 1)
-            {
-              //SNj[j]=data[i];
-            }
-           cout << (int)data[i] << " ";
+            if(q==0)Vip[j]=data[i];
+            else TT[j]=data[i]; 
+            //cout << data[i] << " ";
+          }
+          //cout << endl;
+        }
+        byte a[16],b[16];
+        for(int q=0;q<16;q++)a[q]=KUSNj[q];
+        for(int q=0,w=16;q<16;q++,w++)b[q]=KUSNj[w];
+        
+        SecByteBlock chubby(a,AES::DEFAULT_KEYLENGTH);
+        SecByteBlock chubbyIV(b,AES::BLOCKSIZE);
+        CFB_Mode<AES>::Decryption dc(chubby, chubby.size(), chubbyIV);
+        dc.ProcessData(Vip, Vip, (size_t)(totalsz+1) );
+
+        byte Mid[10],Uip[16],SNjp[16],M[16],curTime[100];
+        i=0;
+        for(int q=0;q<5;q++)
+        {
+          if(q==0)prev=4;
+          else if(q<4)prev=16;
+          else prev=TTsz,i++;
+          cout << prev << ": ";
+          for(int w=0;w<prev;w++,i++)
+          {
+            if(q==0)Mid[w]=Vip[i];
+            else if(q==1)Uip[w]=Vip[i];
+            else if(q==2)SNjp[w]=Vip[i];
+            else if(q==3)M[w]=Vip[i];
+            else curTime[w]=Vip[i];
+            cout << (int)Vip[i] << " ";
           }
           cout << endl;
-          
         }
-      }
-  }
-      
-    
- 
-}
 
+        string tempTime="";
+        for(int q=0;q<TTsz;q++)tempTime+=(char)curTime[q];
+        Time cur = Simulator::Now();
+        TimeValue tv(cur);
+        Ptr<AttributeChecker> check;
+        tv.DeserializeFromString(tempTime,check);
+        Time jeez = tv.Get();
+        Time christ = Simulator::Now();
+        Time comp = NanoSeconds(50000000);
+        if(christ-jeez > comp)
+        {
+          NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
+          return;
+        }
+        for(int q=0;q<16;q++)
+        {
+          if(SNjp[q]!=SNj[q])
+          {
+             NS_LOG_INFO(RED_CODE << "DATA CORRUPTED!"<<END_CODE);
+            return;
+          }
+        }
+
+        
+        //time to create a 32 byte number called Kssk Mid, SNj, M
+        std::string digest1,digest2,digest3;
+        string Midp="";
+        for(int q=0;q<4;q++)Midp+=(byte)Mid[q];
+        SHA3_256 hash;
+        hash.Update((const byte*)Midp.data(), Midp.size());
+        digest1.resize(hash.DigestSize());
+        hash.Final((byte*)&digest1[0]);
+        hash.Update(SNj, (size_t)16);
+        digest2.resize(hash.DigestSize());
+        
+        hash.Final((byte*)&digest2[0]);
+
+        hash.Update(M,(size_t)16 );
+        digest3.resize(hash.DigestSize());
+        hash.Final((byte*)&digest3[0]);
+        string sk ="";
+        for(int q=0;q<32;q++)sk+=(byte)(digest1[q]^digest2[q]^digest3[q]);
+        byte Kssk[32];
+        for(int q=0;q<32;q++)Kssk[q]=(byte)sk[q];
+        
+        Time cur2 = Simulator::Now();
+        TimeValue tv2(cur2);
+        Ptr<AttributeChecker> check2;
+        string g = tv2.SerializeToString(check2);
+        byte message[1000];
+        message[0]=SENSOR_SKEY+'0';
+        message[1]=2;
+
+        i=0;
+        for(int q=0;q<16;q++)Vip[i++]=SNj[q];
+        for(int q=0;q<4;q++)Vip[i++]=Mid[q];
+        Vip[i++]=g.size();
+        for(int q=0;q<(int)g.size();q++)Vip[i++]=(byte)g[q];
+        totalsz = i;;
+        for(int q=0;q<16;q++)a[q]=Kssk[q];
+        for(int q=0,w=16;q<16;q++,w++)b[q]=Kssk[w];
+
+        SecByteBlock chubby2(a,AES::DEFAULT_KEYLENGTH);
+        SecByteBlock chubby2IV(b,AES::BLOCKSIZE);
+        CFB_Mode<AES>::Encryption dcc(chubby2, chubby2.size(), chubby2IV);
+        dcc.ProcessData(Vip, Vip, (size_t)(totalsz+1) );
+        message[2]=totalsz;
+        i=3;
+        for(int q=0;q<totalsz;q++)message[i++]=Vip[q];
+        message[i++]=(int)g.size();
+        for(int q=0;q<(int)g.size();q++)message[i++]=(byte)g[q];
+
+        Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
+        Ptr<Packet> p = Create<Packet>(message,i);
+        speak2->Bind();
+        //InetSocketAddress ass = InetSocketAddress::ConvertFrom(doctor_address[Midp]);
+        //cout << ass.GetIpv4() << endl;
+        speak2->Connect(doctor_address[Midp]);
+        speak2->Send(p);
+        speak2->ShutdownSend();
+      }
+      
+    }
+}
+void SensorApp::AddAddress(string g, Address a)
+{
+  doctor_address[g]=a;
+}
 void SensorApp::SendPing(byte a[])
 {
   byte buff[17];
