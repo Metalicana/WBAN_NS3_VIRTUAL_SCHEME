@@ -192,10 +192,10 @@ void DoctorRegisterApp::SendLoginInfo(string Mid, string PW, Address add, Ptr<Ph
   
   byte buff[32];
   for(int i=0;i<(int)Mid.size();i++)buff[i]=(byte)Mid[i];
+
   hash.Update(buff, (int)Mid.size());
   digest1.resize(hash.DigestSize());
   hash.Final((byte*)&digest1[0]);
-  
   for(int i=0;i<(int)PW.size();i++)buff[i]=(byte)PW[i];
 
   hash.Update(buff, (int)PW.size());
@@ -236,7 +236,6 @@ void DoctorRegisterApp::SendLoginInfo(string Mid, string PW, Address add, Ptr<Ph
 
   SecByteBlock key(Kl, AES::DEFAULT_KEYLENGTH);
   SecByteBlock iv(KlIV,AES::BLOCKSIZE);
-  cout << Simulator::Now() << endl;
   int i=0;
   for(int j=0;j<32;j++,i++)CIDi[i]=(byte)digest1[j];
   for(int j=0;j<16;j++,i++)CIDi[i] = Mb[j];
@@ -295,7 +294,7 @@ RecvString(Ptr<Socket> sock)//Callback
       //uint8_t data[sizeof(packet)];
       uint8_t data[255];
       packet->CopyData(data,sizeof(data));//Write the data in the package into data
-      //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;  
+      //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;
       int num = (int)data[0];
       int prev;
       int i=1;
