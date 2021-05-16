@@ -43,6 +43,7 @@ using namespace std;
 #define BOLD_CODE "\033[1m"
 #define END_CODE "\033[0m"
 
+#define SENSOR_SKEY 3
 #define DOCTOR_LOGIN 4
 #define DOCTOR_REGISTER 5
 #define GATEWAY 6
@@ -364,9 +365,10 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
 
   
   uint8_t buff[3*AES::DEFAULT_KEYLENGTH + 2*AES::BLOCKSIZE + 32 + cc.size()+8];
-  buff[0]=(byte)8;
-  buff[1]=(byte)((int)cc.size());
-  int j=2;
+  buff[0]=1;
+  buff[1]=(byte)8;
+  buff[2]=(byte)((int)cc.size());
+  int j=3;
   int i;
 
   for(i=0;i<(int)cc.size();i++)buff[j++]=plainText[i];
