@@ -89,6 +89,7 @@ private:
   map<string,int> doctors_index;
   map<string, bool> doctor_exist;
   map<string, Address> peer_address;
+  map<string, string> KGWU;
   vector<key_comb> keys; 
 };
 }
