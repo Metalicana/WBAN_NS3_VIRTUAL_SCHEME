@@ -2,6 +2,8 @@
 #define NS3_DOCTOR_REGISTER_APP_H
 
 #include <fstream>
+#include <vector>
+#include <map>
 #include "ns3/log.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -39,8 +41,12 @@ public:
     
   DoctorRegisterApp ();
   virtual ~DoctorRegisterApp();
+  void SetKssk(string g);
+  void SetMid(string g);
   void SendPacket (Ptr<Packet> packet);
   void StartSending(string g);
+  Address GetAddress(string g);
+  void SetAddress(string g,Address add);
   void RecvString(Ptr<Socket> sock);
   void SendRegisterInfo(string Mid, string PW, Address add);
   void SendLoginInfo(string Mid, string PW, Address add,Ptr<PhoneApp> patient, Ptr<SensorApp> sensor);
@@ -59,14 +65,18 @@ private:
 
   Ptr<Socket>     speaker_socket;
   Ptr<Socket>     listener_socket;
+  
   Address         m_peer;
   uint32_t        m_packetSize;
   uint32_t        m_nPackets;
   DataRate        m_dataRate;
   EventId         m_sendEvent;
   bool            m_running;
+  string          Kssk;
+  string          Mid;
   uint32_t        m_packetsSent;
   uint16_t        port;
+  map<string,Address> doctor_address;
   std::list<Ptr<Socket> > m_socketList; 
   uint8_t         m_id;
   byte            Ni[32];
@@ -78,6 +88,7 @@ private:
   byte            KjIV[16];
   byte            Kl[16];
   byte            KlIV[16];
+  byte            M[16];
 
 
   
