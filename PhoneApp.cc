@@ -292,15 +292,21 @@ RecvString(Ptr<Socket> sock)//Callback
         string h = g;
         byte message[1000];
         g="";
+        for(int q=0;q<16;q++)g+=(char)SNjp[q];
+        int idx = sensor_idx[g];
+        string kk = sensor_kusnj[idx];
+        for(int q=0;q<32;q++)KUSNj[q]=(byte)kk[q];
         for(int q=0;q<16;q++)a[q]=KUSNj[q];
         for(int q=0,w=16;q<16;q++,w++)b[q]=KUSNj[w];
-        for(int q=0;q<16;q++)g+=(char)SNjp[q];
+        
+        
         SecByteBlock chubby2(a,AES::DEFAULT_KEYLENGTH);
         SecByteBlock chubby2IV(b,AES::BLOCKSIZE);
         
         CFB_Mode<AES>::Encryption ec(chubby2, chubby2.size(), chubby2IV);
         ec.ProcessData(Vip, Vip, (size_t)(totesz+1) );
-        int idx = sensor_idx[g];
+        
+
         NS_LOG_INFO(GREEN_CODE<<idx<<END_CODE);
         Address add = sensor_address[idx];
 
@@ -310,7 +316,7 @@ RecvString(Ptr<Socket> sock)//Callback
         i=3;
         for(int q=0;q<totesz;q++,i++)message[i]=Vip[q];
         message[i++]=h.size();
-        for(int q=0;q<(int)h.size();q++)message[i++]=h[q];
+        for(int q=0;q<(int)h.size();q++)message[i++]=(byte)h[q];
 
         Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
         Ptr<Packet> p = Create<Packet>(message,i);
@@ -318,7 +324,6 @@ RecvString(Ptr<Socket> sock)//Callback
         speak2->Connect(add);
         speak2->Send(p);
         speak2->ShutdownSend();
-        NS_LOG_INFO("Data sent to unknown person");
 
       }
       else
@@ -349,8 +354,11 @@ RecvString(Ptr<Socket> sock)//Callback
           if(tp==2)
           {
             string g="";
+            string h="";
+            for(int q=0;q<32;q++)h+=(char)KUSNj[q];
             for(int q=0;q<16;q++)g+=(char)SNj[q];
             sensor_idx[g]=sensor_cnt;
+            sensor_kusnj.push_back(h);
             sensor_cnt++;
           }
       }
