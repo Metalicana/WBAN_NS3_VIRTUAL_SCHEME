@@ -2,6 +2,7 @@
 #define NS3_SENSOR_APP_H
 
 #include <fstream>
+#include <map>
 #include "ns3/log.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -26,6 +27,7 @@
 
 using namespace std;
 using namespace ns3;
+using namespace CryptoPP;
 namespace ns3
 {
   class SensorApp : public Application 
@@ -37,6 +39,7 @@ public:
   SensorApp ();
   virtual ~SensorApp();
   void SendPing(byte a[]);
+  void AddAddress(string g, Address a);
   void SendPacket (Ptr<Packet> packet);
   void StartSending(string g);
   void RecvString(Ptr<Socket> sock);
@@ -62,6 +65,7 @@ private:
 
   Ptr<Socket>     speaker_socket;
   Ptr<Socket>     listener_socket;
+  map<string,Address> doctor_address;
   Address         m_peer;
   uint32_t        m_packetSize;
   uint32_t        m_nPackets;
