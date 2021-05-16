@@ -470,7 +470,7 @@ RecvString(Ptr<Socket> sock)//Callback
           //Doctor needs to decode CIDi
           NS_LOG_INFO(BLUE_CODE<< "Incoming Login request from doctor" << END_CODE);
           byte CIDi[100];
-          byte C[10];
+          byte C[100];
           byte TT[100];
           int CIDisz,Csz,TTsz;
           int i=2;
@@ -508,14 +508,132 @@ RecvString(Ptr<Socket> sock)//Callback
             
           }*/
           i=0;
+          byte HMid[32],M[16],Ui[16],SNj[16],Ts[20];
           for(int q=0;q<5;q++)
           {
             if(q==0)val=32;
             else if(q>0&&q<4)val=16;
             else val=TTsz,i++;
-            for(int s=0;s<val;s++,i++)cout<< (int)CIDi[i] << " ";
+            cout << val << ": ";
+            for(int s=0;s<val;s++,i++)
+            {
+              if(q==0)HMid[s]=CIDi[i];
+              else if(q==1)M[s]=CIDi[i];
+              else if(q==2)Ui[s]=CIDi[i];
+              else if(q==3)SNj[s]=CIDi[i];
+              else Ts[s]=CIDi[i];
+              cout << (int)CIDi[i] << " ";
+            }
             cout << endl;
+            
           }
+          string tempTime="";
+          for(int q=0;q<TTsz;q++)
+          {
+            tempTime+=(char)Ts[q];
+            if((int)Ts[q]!=(int)TT[q])
+            {
+              NS_LOG_INFO(RED_CODE << "PACKET WAS CORRUPTED! WRONG TIME"<<END_CODE);
+              return;
+            }
+          }
+          //cout << tempTime << endl;
+          Time cur = Simulator::Now();
+          TimeValue tv(cur);
+          Ptr<AttributeChecker> check;
+          tv.DeserializeFromString(tempTime,check);
+          Time jeez = tv.Get();
+          Time christ = Simulator::Now();
+          Time comp = NanoSeconds(50000000);
+          if(christ-jeez > comp)
+          {
+            NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
+            return;
+          }
+          CFB_Mode<AES>::Decryption dcc(chabi.Kj, chabi.Kj.size(), chabi.KjBlock);
+          dcc.ProcessData(C, C, (size_t)(Csz+1) );
+          string tempM="",tempID="";
+          for(int q=0;q<Csz;q++)
+          {
+            if(q<4)tempM+=(char)C[q];
+            else tempID+=(char)C[q];
+          }
+          byte buff[32];
+          for(int q=0;q<tempM.size();q++)buff[q]=tempM[q];
+
+          string digest1;
+          SHA3_256 hash;
+          hash.Update(buff, tempM.size());
+          digest1.resize(hash.DigestSize());
+          byte HMids[32];
+
+          hash.Final((byte*)&digest1[0]);
+          for(int q=0;q<32;q++)HMids[q]=digest1[q];
+          for(int q=0;q<32;q++)
+          {
+            if(HMid[q]!=HMids[q])
+            {
+              NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED! WRONG HASH"<<END_CODE);
+              return;
+            }
+          }
+          string IDgw = "";
+          uint32_t temp = ID;
+          if(temp == 0)IDgw+='0';
+          while(temp!=0)
+          {
+            IDgw+=(char)(temp%10+'0');
+            temp/=10;
+          }
+          reverse(IDgw.begin(),IDgw.end());
+          if(IDgw != tempID)
+          {
+            NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED! WRONG IDgw"<<END_CODE);
+            return;
+          }
+          byte a[16],b[16];
+          i=0;
+          string g,peer;
+          for(int j=0;j<16;j++)g+=(char)Ui[j];
+          for(int j=0;j<16;j++,i++)a[j]=KGWU[g][i];
+          for(int j=0;j<16;j++,i++)b[j]=KGWU[g][i];
+          peer=g;
+          byte Vi[1000];
+          i=0;
+          for(int j=0;j<tempM.size();j++,i++)Vi[i]=(byte)tempM[j];
+          for(int j=0;j<16;j++,i++)Vi[i]=(byte)Ui[j];
+          for(int j=0;j<16;j++,i++)Vi[i]=(byte)SNj[j];
+          for(int j=0;j<16;j++,i++)Vi[i]=(byte)M[j];
+
+          Time cur2 = Simulator::Now();
+          TimeValue tv2(cur2);
+          Ptr<AttributeChecker> check2;
+          g = tv2.SerializeToString(check2);
+          
+          Vi[i++]=g.size();
+          for(int j=0;j<g.size();j++,i++)Vi[i]=(byte)g[j];
+          int totalsz =i;
+
+          SecByteBlock chubby(a,AES::DEFAULT_KEYLENGTH);
+          SecByteBlock chubbyIV(b,AES::BLOCKSIZE);
+
+          CFB_Mode<AES>::Encryption ec(chubby, chubby.size(), chubbyIV);
+          ec.ProcessData(Vi, Vi, (size_t)(totalsz+1) );
+
+          byte message[1000];
+          message[0]=3;
+          message[1]=2;
+          message[2]=totalsz;
+          i=3;
+          for(int q=0;q<totalsz;q++)message[i++]=Vi[q];
+          message[i++]=g.size();
+          for(int q=0;q<(int)g.size();q++)message[i++]=(byte)g[q];
+          Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
+          //SendPacket(p,add);
+          Ptr<Packet> p = Create<Packet>(message,i);
+          speak2->Bind();
+          speak2->Connect(peer_address[peer]);
+          speak2->Send(p);
 
         }
         else if(mid == PATIENT)
@@ -588,9 +706,10 @@ void GatewayApp::SensorRegister(string peer, Address add)
   for(int q=0;q<16;q++)ui[q]=(byte)peer[q];
   byte sz = (byte)((int)digest1.size());
   byte buff[10000];
-  buff[0]=(byte)3;
-  buff[1] = AES::DEFAULT_KEYLENGTH;
-  int i=2;
+  buff[0]=1;
+  buff[1]=(byte)3;
+  buff[2] = AES::DEFAULT_KEYLENGTH;
+  int i=3;
   for(int j=0; j < AES::DEFAULT_KEYLENGTH; j++,i++)
   {
     buff[i]=ui[j];//ui
@@ -607,17 +726,21 @@ void GatewayApp::SensorRegister(string peer, Address add)
   Ptr<Socket> speak = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
   Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
   //SendPacket(p,add);
+  InetSocketAddress sex = InetSocketAddress::ConvertFrom(add);
+  //NS_LOG_INFO(GREEN_CODE << sex.GetIpv4() << END_CODE);
   speak2->Bind();
   speak2->Connect(add);
   speak2->Send(p);
-  
+
   speak->Bind();
   speak->Connect(peer_address[peer]);
 
   byte tuff[1000];
+
   tuff[0] = (byte)2;
-  tuff[1] = (byte)16;
-  i=2;
+  tuff[1] = (byte)2;
+  tuff[2] = (byte)16;
+  i=3;
   for(int q=0;q<16;q++,i++)tuff[i]=cur_code[q];
   tuff[i++]=32;
   for(int q=0;q<32;q++,i++)tuff[i]=digest1[q];
@@ -642,7 +765,7 @@ void GatewayApp::PatientRegister(Address add)
   SHA3_256 hash;
   hash.Update((const byte*)cur.data(), cur.size());
   digest1.resize(hash.DigestSize());
-  hash.Final((byte*)&digest1[0]);
+  hash.Final((byte*)&digest1[0]);//UI
   string IDgw = "";
   uint32_t temp = ID;
   if(temp == 0)IDgw+='0';
@@ -653,31 +776,36 @@ void GatewayApp::PatientRegister(Address add)
   }
   reverse(IDgw.begin(),IDgw.end());
   byte cc[1000];
+  string h="";
   for(int i=0;i<(int)IDgw.size();i++)
   {
     cc[i]=(byte)IDgw[i];
+    
   }
   hash.Update((const byte*)cc, (int)IDgw.size());
   digest2.resize(hash.DigestSize());
   hash.Final((byte*)&digest2[0]);
+
   for(int i=0;i<(int)digest1.size();i++)
   {
     digest1[i] = (digest1[i]^digest2[i]);
+    h+=(char)digest1[i];
   }
-  
+  KGWU[g]=h;
   byte sz = (byte)((int)digest1.size());
   byte buff[10000];
-  buff[0]=(byte)2;
-  buff[1] = AES::DEFAULT_KEYLENGTH;
-  int i=2;
+  buff[0]=(byte)1;
+  buff[1]=(byte)2;
+  buff[2] = AES::DEFAULT_KEYLENGTH;
+  int i=3;
   for(int j=0; j < AES::DEFAULT_KEYLENGTH; j++,i++)
   {
     buff[i]=cur_code[j];
   }
   buff[i++] = sz;
   for(int j=0;j<(int)digest1.size();j++,i++)buff[i]=digest1[j];
-  buff[sz+AES::DEFAULT_KEYLENGTH+3]='\0';
-  Ptr<Packet> p = Create<Packet>(buff,sz+AES::DEFAULT_KEYLENGTH+3);
+  buff[i]='\0';
+  Ptr<Packet> p = Create<Packet>(buff,i);
   SendPacket(p,add);
 }
 void GatewayApp::HandleAccept (Ptr<Socket> s, const Address& from)
