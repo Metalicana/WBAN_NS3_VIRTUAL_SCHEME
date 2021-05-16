@@ -191,35 +191,65 @@ RecvString(Ptr<Socket> sock)//Callback
     // uint8_t data[sizeof(packet)];
       uint8_t data[255];
       packet->CopyData(data,sizeof(data));//Write the data in the package into data
-      //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;  
-      int num = (int)data[0];
+      //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl; 
+      int tp = data[0]; 
+      int num = (int)data[1];
       int prev;
-      int i=1;
-      for(int q=0;q<num;q++)
+      int i=2;
+      if(tp==1)
       {
-        prev = (int)data[i];
-        i++;
-        //cout << prev << ": ";
-        for(int j=0;j<prev;i++,j++)
+        NS_LOG_INFO("THIS IS BY THE GW");
+        for(int q=0;q<num;q++)
         {
-          if(q==0)
+          prev = (int)data[i];
+          i++;
+          //cout << prev << ": ";
+          for(int j=0;j<prev;i++,j++)
           {
-            Ui[j]=data[i];
+            if(q==0)
+            {
+              Ui[j]=data[i];
+            }
+            else if(q== 1)
+            {
+              SNj[j]=data[i];
+            }
+            else if(q == 2)
+            {
+              KUSNj[j] = data[i];
+            }
+          // cout << (int)data[i] << " ";
           }
-          else if(q== 1)
-          {
-            SNj[j]=data[i];
-          }
-          else if(q == 2)
-          {
-            KUSNj[j] = data[i];
-          }
-         // cout << (int)data[i] << " ";
+          //cout << endl;
+          
         }
-        //cout << endl;
-        
       }
-    }
+      else
+      {
+         NS_LOG_INFO("THIS IS BY THE PHONE");
+        for(int q=0;q<num;q++)
+        {
+          prev = (int)data[i];
+          i++;
+          cout << prev << ": ";
+          for(int j=0;j<prev;i++,j++)
+          {
+            if(q==0)
+            {
+              //Ui[j]=data[i];
+            }
+            else if(q== 1)
+            {
+              //SNj[j]=data[i];
+            }
+           cout << (int)data[i] << " ";
+          }
+          cout << endl;
+          
+        }
+      }
+  }
+      
     
  
 }
