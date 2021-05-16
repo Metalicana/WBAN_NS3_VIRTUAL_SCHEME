@@ -223,9 +223,9 @@ void DoctorRegisterApp::SendLoginInfo(string Mid, string PW, Address add, Ptr<Ph
   
   //digest1 is H(Mid)
   AutoSeededRandomPool rnd;
-  SecByteBlock M(0x00, AES::DEFAULT_KEYLENGTH);
-  rnd.GenerateBlock(M,M.size());
-  byte *Mb = M.data();
+  SecByteBlock MM(0x00, AES::DEFAULT_KEYLENGTH);
+  rnd.GenerateBlock(MM,MM.size());
+  byte *Mb = MM.data();
   byte *Ui = patient->GetUi();
   byte *Nj = sensor->GetSNj();
   byte CIDi[10000];
@@ -237,6 +237,7 @@ void DoctorRegisterApp::SendLoginInfo(string Mid, string PW, Address add, Ptr<Ph
   SecByteBlock key(Kl, AES::DEFAULT_KEYLENGTH);
   SecByteBlock iv(KlIV,AES::BLOCKSIZE);
   int i=0;
+  for(int q=0;q<16;q++)M[q]=Mb[q];
   for(int j=0;j<32;j++,i++)CIDi[i]=(byte)digest1[j];
   for(int j=0;j<16;j++,i++)CIDi[i] = Mb[j];
   for(int j=0;j<16;j++,i++)CIDi[i] = Ui[j];
@@ -277,6 +278,10 @@ void DoctorRegisterApp::SendLoginInfo(string Mid, string PW, Address add, Ptr<Ph
   NS_LOG_INFO(BLUE_CODE << "Successfully sent Mid and PW to GW" << END_CODE);*/
 
 }
+Address DoctorRegisterApp:: GetAddress(string g)
+{
+  return doctor_address[g];
+}
 void DoctorRegisterApp::
 RecvString(Ptr<Socket> sock)//Callback
 {
@@ -295,11 +300,14 @@ RecvString(Ptr<Socket> sock)//Callback
       uint8_t data[255];
       packet->CopyData(data,sizeof(data));//Write the data in the package into data
       //cout <<sock->GetNode()->GetId()<<" "<<"receive : '" << data <<"' from "<<address.GetIpv4 ()<< endl;
-      int num = (int)data[0];
+      int tp=(int)data[0];
+      int num = (int)data[1];
       int prev;
-      int i=1;
-      for(int q=0;q<num;q++)
+      int i=2;
+      if(tp==1)
       {
+        for(int q=0;q<num;q++)
+        {
         prev = (int)data[i];
         i++;
         cout << prev << ": ";
@@ -317,12 +325,123 @@ RecvString(Ptr<Socket> sock)//Callback
         }
         cout << endl;
         
+        }
       }
+      else
+      {
+        NS_LOG_INFO("WE DID IT");
+
+        byte Vip[100];
+        byte TT[100];
+        int totalsz;
+        int TTsz;
+
+        for(int q=0;q<num;q++)
+        {
+          if(q==0)prev=data[i],totalsz = prev;
+          else prev=data[i],TTsz = prev;
+          //cout << prev <<": ";
+          i++;
+          for(int j=0;j<prev;j++)
+          {
+            //cout << (int)data[i]<<" ";
+            if(q==0)Vip[j]=data[i++];
+            else TT[j]=data[i++];
+            
+          }
+         // cout << endl;
+        }
+
+
+        byte Midp[10],curTime[100],SNjp[16];
+        std::string digest1,digest2,digest3;
+        SHA3_256 hash;
+        hash.Update((const byte*)Mid.data(), Mid.size());
+        digest1.resize(hash.DigestSize());
+        hash.Final((byte*)&digest1[0]);
+        byte sex[16];
+        for(int q=0;q<16;q++)sex[q]=Kssk[q];
+        hash.Update((const byte*)Kssk.data(), (size_t)16);
+        digest2.resize(hash.DigestSize());
+        hash.Final((byte*)&digest2[0]);
+
+        hash.Update(M,(size_t)16 );
+        digest3.resize(hash.DigestSize());
+        hash.Final((byte*)&digest3[0]);
+
+        byte ans[32];
+        for(int q=0;q<32;q++)ans[q]=(digest1[q]^digest2[q]^digest3[q]);
+        
+        byte a[16],b[16];
+        int j=0;
+        for(int q=0;q<16;q++)a[q]=(byte)ans[j++];
+        for(int q=0;q<16;q++)b[q]=(byte)ans[j++];
+
+        SecByteBlock chubby(a,AES::DEFAULT_KEYLENGTH);
+        SecByteBlock chubbyIV(b,AES::BLOCKSIZE);
+        CFB_Mode<AES>::Decryption dc(chubby, chubby.size(), chubbyIV);
+        dc.ProcessData(Vip, Vip, (size_t)(totalsz+1) );
+        i=0;
+        for(int q=0;q<3;q++)
+        {
+          if(q==0)prev=16;
+          else if(q==1)prev=4;
+          else prev=Vip[i++];
+          cout << prev << ": ";
+          for(int j=0;j<prev;j++)
+          {
+            cout << (int)data[i]<<" ";
+            if(q==0)SNjp[j]=Vip[i++];
+            else if(q==1)Midp[j]=Vip[i++];
+            else curTime[j]=Vip[i++];
+          }
+          cout << endl;
+        }
+        string tempTime="";
+        for(int q=0;q<TTsz;q++)tempTime+=(char)curTime[q];
+        Time cur = Simulator::Now();
+        TimeValue tv(cur);
+        Ptr<AttributeChecker> check;
+        tv.DeserializeFromString(tempTime,check);
+        Time jeez = tv.Get();
+        Time christ = Simulator::Now();
+        Time comp = NanoSeconds(50000000);
+        if(christ-jeez > comp)
+        {
+          NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
+          return;
+        }
+        for(int q=0;q<16;q++)
+        {
+          if((byte)Kssk[q]!=SNjp[q])
+          {
+            NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED!"<<END_CODE);
+            return;
+          }
+        }
+        for(int q=0;q<4;q++)
+        {
+          if((byte)Mid[q]!=Midp[q])
+          {
+            NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED!"<<END_CODE);
+            return;
+          }
+        }
+        NS_LOG_INFO(RED_CODE<<"SUCCESSFULLY ESTABLISHED CONNECTTION WITH SENSOR"<<END_CODE);
+      }
+      
     }
     
  
 }
-
+void DoctorRegisterApp::SetMid(string g)
+{
+  Mid = g;
+}
+void DoctorRegisterApp::SetKssk(string g)
+{
+  Kssk = g;
+}
 void DoctorRegisterApp::HandleAccept (Ptr<Socket> s, const Address& from)
  {
    s->SetRecvCallback (MakeCallback (&DoctorRegisterApp::RecvString, this));
