@@ -77,7 +77,8 @@ private:
   byte            KUSNj[32];
   map<string,int> sensor_idx;  
   int             sensor_cnt;
-  vector<Address> sensor_address;    
+  vector<Address> sensor_address;
+  vector<string>  sensor_kusnj;    
 };
 
 }
