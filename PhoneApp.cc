@@ -205,15 +205,15 @@ RecvString(Ptr<Socket> sock)//Callback
             if(q==0)totalsz=prev;
             else TTsz=prev;
             i++;
-            cout << prev << ": ";
+           // cout << prev << ": ";
             for(int j=0;j<prev;i++,j++)
             {
-              cout << (int)data[i] << " ";
+              //cout << (int)data[i] << " ";
               if(q==0)Vip[j]=data[i];
               else TT[j]=data[i];
               
             }
-            cout << endl;
+           // cout << endl;
         }
         byte a[16],b[16];
         for(int q=0;q<16;q++)a[q]=KGWU[q];
@@ -231,7 +231,7 @@ RecvString(Ptr<Socket> sock)//Callback
           if(q==0)prev=4;
           else if(q<4)prev=16;
           else prev=TTsz,i++;
-          cout << prev << ": ";
+         // cout << prev << ": ";
           for(int w=0;w<prev;w++,i++)
           {
             if(q==0)Mid[w]=Vip[i];
@@ -239,9 +239,9 @@ RecvString(Ptr<Socket> sock)//Callback
             else if(q==2)SNjp[w]=Vip[i];
             else if(q==3)M[w]=Vip[i];
             else curTime[w]=Vip[i];
-            cout << (int)Vip[i] << " ";
+            //cout << (int)Vip[i] << " ";
           }
-          cout << endl;
+          //cout << endl;
         }
         string tempTime="";
         for(int q=0;q<TTsz;q++)tempTime+=(char)curTime[q];
@@ -251,7 +251,7 @@ RecvString(Ptr<Socket> sock)//Callback
         tv.DeserializeFromString(tempTime,check);
         Time jeez = tv.Get();
         Time christ = Simulator::Now();
-        Time comp = NanoSeconds(50000000);
+        Time comp = NanoSeconds(5000000000);
         if(christ-jeez > comp)
         {
           NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
@@ -332,10 +332,10 @@ RecvString(Ptr<Socket> sock)//Callback
           {
             prev = (int)data[i];
             i++;
-            cout << prev << ": ";
+           // cout << prev << ": ";
             for(int j=0;j<prev;i++,j++)
             {
-              cout << (int)data[i] << " ";
+              //cout << (int)data[i] << " ";
               if(tp==1)
               {
                 if(q==0)Ui[j]=data[i];
@@ -348,7 +348,7 @@ RecvString(Ptr<Socket> sock)//Callback
               }
               
             }
-            cout << endl;
+           // cout << endl;
             
           }
           if(tp==2)
