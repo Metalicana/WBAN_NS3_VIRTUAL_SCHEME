@@ -1,4 +1,6 @@
 #include <fstream>
+#include <string>
+#include <vector>
 #include <stdlib.h>
 #include "ns3/log.h"
 #include "ns3/core-module.h"
@@ -11,7 +13,7 @@
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
 #include "ns3/point-to-point-star.h"
-
+#include "ns3/error-model.h"
 #include "DoctorRegisterApp.h"
 #include "GatewayApp.h"
 #include "PhoneApp.h"
@@ -36,18 +38,20 @@ RxDrop (Ptr<const Packet> p)
 {
   NS_LOG_UNCOND ("RxDrop at " << Simulator::Now ().GetSeconds ());
 }
-void init( Ptr<SensorApp> s,Ptr<PhoneApp> p)
+void init( Ptr<SensorApp> s,Ptr<PhoneApp> p, Address ad)
 {
   //get the Ui
   byte *buff = p->GetUi();
+  InetSocketAddress add = InetSocketAddress::ConvertFrom (ad);
+  p->UpdateSensor(ad);
   s->SendPing(buff);
-  cout << "HUHU\n";
 }
-void bro(Ptr<SensorApp> sens)
+void bro(Ptr<SensorApp> sens,Ptr<DoctorRegisterApp> doc)
 {
   byte *buff = sens->GetSNj();
-  for(int q=0;q<16;q++)cout << buff[q] << "~";
-  cout << endl;
+  string Kssk="";
+  for(int q=0;q<16;q++)Kssk+=(byte)buff[q];
+  doc->SetKssk(Kssk);
 }
 int 
 main (int argc, char *argv[])
@@ -61,10 +65,24 @@ main (int argc, char *argv[])
   LogComponentEnable("GatewayApp",LOG_LEVEL_ALL);
   LogComponentEnable("PhoneApp",LOG_LEVEL_ALL);
   LogComponentEnable("SensorApp",LOG_LEVEL_ALL);
+
+
+  Config::SetDefault ("ns3::RateErrorModel::ErrorRate", DoubleValue (.05));
+   Config::SetDefault ("ns3::RateErrorModel::ErrorUnit", StringValue ("ERROR_UNIT_PACKET"));
+ 
+   Config::SetDefault ("ns3::BurstErrorModel::ErrorRate", DoubleValue (0.01));
+   Config::SetDefault ("ns3::BurstErrorModel::BurstSize", StringValue ("ns3::UniformRandomVariable[Min=1|Max=3]"));
+ 
+   Config::SetDefault ("ns3::OnOffApplication::PacketSize", UintegerValue (210));
+   Config::SetDefault ("ns3::OnOffApplication::DataRate", DataRateValue (DataRate ("448kb/s")));
+ 
+   std::string errorModelType = "ns3::RateErrorModel";
+
   int doctorNodeCnt=5;
   int gatewayNodeCnt=1;
   int patientNodeCnt=3;
-  int sensorNodeCnt=patientNodeCnt*3;
+  int perSensorNode = 15;
+  int sensorNodeCnt=patientNodeCnt*perSensorNode;
   int totalNodes = doctorNodeCnt+gatewayNodeCnt+sensorNodeCnt+patientNodeCnt;
 
   NodeContainer GatewayNode;
@@ -184,139 +202,167 @@ main (int argc, char *argv[])
   gw_app->SetStopTime (Seconds (20.));
   gw_app->Setup (gw_speaker,gw_listener, p2pStar.GetHubIpv4Address(0) , 1040, 1000, DataRate ("1Mbps"),sinkPort,GATEWAY,10);
   (p2pStar.GetHub())->AddApplication(gw_app);
+  //ESTABLISH CONNECTION BETWEEN PHONE AND SENSORS
+
 
   i=doctorNodeCnt;
   //doctorNodeCnt+patientNodeCnt is where sensors starts
   int bs = doctorNodeCnt+patientNodeCnt;
+  std::vector<NodeContainer> nodeAdjacencyList (perSensorNode*patientNodeCnt);
+  
   for(int j=0;j<patientNodeCnt;j++,i++)
   {
-    for(int k=0;k<3;k++)
+    for(int k=0;k<perSensorNode;k++)
     {
-      pointToPoint.Install(p2pStar.GetSpokeNode(i),p2pStar.GetSpokeNode(bs + j*3 + k));
+      nodeAdjacencyList[j*perSensorNode+k] = NodeContainer (p2pStar.GetSpokeNode(i), p2pStar.GetSpokeNode(bs + j*perSensorNode + k));
     }
   }
+  p2pStar.GetHub()->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback (&RxDrop));
+
+  PointToPointHelper p2p;
+  p2p.SetDeviceAttribute ("DataRate", StringValue ("1Mbps"));
+  p2p.SetChannelAttribute ("Delay", StringValue ("1ms"));
+  std::vector<NetDeviceContainer> deviceAdjacencyList (perSensorNode*patientNodeCnt);
+  ObjectFactory factory;
+   factory.SetTypeId (errorModelType);
+   Ptr<ErrorModel> em = factory.Create<ErrorModel> ();
+  for(uint32_t i=0; i<deviceAdjacencyList.size (); ++i)
+  {
+    deviceAdjacencyList[i] = p2p.Install (nodeAdjacencyList[i]);
+    deviceAdjacencyList[i].Get(0)->SetAttribute("ReceiveErrorModel", PointerValue (em));
+  }
+  
+  Ipv4AddressHelper ipv4;
+  std::vector<Ipv4InterfaceContainer> interfaceAdjacencyList (perSensorNode*patientNodeCnt);
+  for(uint32_t i=0; i<interfaceAdjacencyList.size (); ++i)
+  {
+      std::ostringstream subnet;
+      subnet<<"11.1."<<i+1<<".0";
+      ipv4.SetBase (subnet.str ().c_str (), "255.255.255.0");
+      interfaceAdjacencyList[i] = ipv4.Assign (deviceAdjacencyList[i]);
+  }
+  for(int j=0;j<patientNodeCnt;j++,i++)
+  {
+    for(int k=0;k<perSensorNode;k++)
+    {
+      //InetSocketAddress ad = InetSocketAddress::ConvertFrom();
+      Address add = InetSocketAddress(interfaceAdjacencyList[j*perSensorNode+k].GetAddress(1),sinkPort);
+      sensorAddress[j*perSensorNode+k] = add;
+      //nodeAdjacencyList[j*3+k] = NodeContainer (p2pStar.GetSpokeNode(i), p2pStar.GetSpokeNode(bs + j*3 + k));
+    }
+  }
+
+
+  //ESTABLISH CONNECTION BETWEEN SENSORS AND MEDICAL EXPERT
+  i=doctorNodeCnt;
+  //doctorNodeCnt+patientNodeCnt is where sensors starts
+  bs = doctorNodeCnt+patientNodeCnt;
+  std::vector<NodeContainer> nodeAdjacencyList2 (sensorNodeCnt*doctorNodeCnt);
+  
+  for(int j=0;j<doctorNodeCnt;j++)
+  {
+    for(int k=0;k<sensorNodeCnt;k++)
+    {
+      nodeAdjacencyList2[j*sensorNodeCnt+k] = NodeContainer (p2pStar.GetSpokeNode(j), p2pStar.GetSpokeNode(bs + k));
+    }
+  }
+
+  PointToPointHelper p2p2;
+  p2p2.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+  p2p2.SetChannelAttribute ("Delay", StringValue ("7ms"));
+  //Doctor and sensors
+  std::vector<NetDeviceContainer> deviceAdjacencyList2 (sensorNodeCnt*doctorNodeCnt);
+
+  for(i=0; i<deviceAdjacencyList2.size (); ++i)
+  {
+    deviceAdjacencyList2[i] = p2p2.Install (nodeAdjacencyList2[i]);
+
+  }
+
+  Ipv4AddressHelper ipv42;
+  std::vector<Ipv4InterfaceContainer> interfaceAdjacencyList2(sensorNodeCnt*doctorNodeCnt);
+  for(uint32_t i=0; i<interfaceAdjacencyList2.size (); ++i)
+  {
+      std::ostringstream subnet;
+      subnet<<"12.1."<<i+1<<".0";
+      ipv42.SetBase (subnet.str ().c_str (), "255.255.255.0");
+      interfaceAdjacencyList2[i] = ipv42.Assign (deviceAdjacencyList2[i]);
+  }
+
+  for(int j=0;j<doctorNodeCnt;j++)
+  {
+    for(int k=0;k<sensorNodeCnt;k++)
+    {
+      Address add = InetSocketAddress(interfaceAdjacencyList2[j*sensorNodeCnt +k].GetAddress(0),sinkPort);
+      char x = j + (int)'0' + 1;
+      string y = "";
+      y+=x;
+      y+='0';
+      y+='0';
+      y+='0';
+      doctor_app[j]->SetMid(y);
+      sensor_app[k]->AddAddress(y,add);
+    }
+  }
+  AsciiTraceHelper ascii;
+  pointToPoint.EnableAsciiAll(ascii.CreateFileStream("testing1.tr"));
+  p2p.EnableAsciiAll(ascii.CreateFileStream("testing2.tr"));
+  p2p2.EnableAsciiAll(ascii.CreateFileStream("testing3.tr"));
+
+
 
   //patient sends request to be registered 
   //for each patient randomly pick an ID ui and perform SHA256 with the user ID of the gateway send it to the patient.
   //doctor_app[0]->StartSending("591022132\nabcdefgh");
   Simulator::Schedule (Seconds (3), &DoctorRegisterApp::SendRegisterInfo, doctor_app[0], "1000" , "abcde", gwAddress[0]);
-  Simulator::Schedule (Seconds (4), &DoctorRegisterApp::SendRegisterInfo, doctor_app[1], "2000" , "abcde", gwAddress[1]);
-  Simulator::Schedule (Seconds (5), &DoctorRegisterApp::SendRegisterInfo, doctor_app[2], "3000" , "abcde", gwAddress[2]);
+  Simulator::Schedule (Seconds (3.1), &DoctorRegisterApp::SendRegisterInfo, doctor_app[1], "2000" , "abcde", gwAddress[1]);
+  Simulator::Schedule (Seconds (3.2), &DoctorRegisterApp::SendRegisterInfo, doctor_app[2], "3000" , "abcde", gwAddress[2]);
+  Simulator::Schedule (Seconds (3.3), &DoctorRegisterApp::SendRegisterInfo, doctor_app[3], "4000" , "abcde", gwAddress[3]);
+  Simulator::Schedule (Seconds (3.4), &DoctorRegisterApp::SendRegisterInfo, doctor_app[4], "5000" , "abcde", gwAddress[4]);
 
  
 
 
   Simulator::Schedule (Seconds (6), &PhoneApp::SendPing, phone_app[0]);
-  Simulator::Schedule (Seconds (7), &PhoneApp::SendPing, phone_app[1]);
-  Simulator::Schedule (Seconds (8), &PhoneApp::SendPing, phone_app[2]);
+  Simulator::Schedule (Seconds (6.001), &PhoneApp::SendPing, phone_app[1]);
+  Simulator::Schedule (Seconds (6.002), &PhoneApp::SendPing, phone_app[2]);
 
   byte *buff;
   for(i=0;i<patientNodeCnt;i++)
   {
-    for(int j=0;j<3;j++)
+    for(int j=0;j<perSensorNode;j++)
     {
       //sensor node will ping the server with UI of the patient
       //server will handle it
-      Simulator::Schedule (Seconds (9.0 + (double)(j+0.025)), &init, sensor_app[i*patientNodeCnt+j], phone_app[i]);
+      Simulator::Schedule (Seconds (7.0 + (double)(j*0.0025) + (double)(i*0.025)), &init, sensor_app[i*perSensorNode+j], phone_app[i],sensorAddress[i*perSensorNode+j]);
     }
   }
-  Simulator::Schedule (Seconds (14), &bro, sensor_app[0]);
-  Simulator::Schedule (Seconds (15), &DoctorRegisterApp::SendLoginInfo, doctor_app[0], "1000" , "abcde", gwAddress[0], phone_app[0], sensor_app[2]);
-  //Simulator::Schedule (Seconds (16), &DoctorRegisterApp::SendLoginInfo, doctor_app[1], "2000" , "abcde", gwAddress[1], phone_app[0], sensor_app[1]);
-  //Simulator::Schedule (Seconds (17), &DoctorRegisterApp::SendLoginInfo, doctor_app[2], "3000" , "abcde", gwAddress[2], phone_app[0], sensor_app[2]);
-  /*byte *buff;
-  byte temp[16];
-  for(i=0;i<patientNodeCnt;i++)
+  
+
+  for(int i=0;i<3;i++)
   {
-    buff = phone_app[i]->GetUi();
-    for(int j=0;j<sensorNodeCnt;j++)
-    {
-      sensor_app[i*sensorNodeCnt + j]->SetBuff(buff);
-    }
-  }*/
-  
+   // Simulator::Schedule (Seconds (9.0), &bro, sensor_app[i], doctor_app[i]);
+    string g;
+
+    Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[0], "1000" , "abcde", gwAddress[0], phone_app[0], sensor_app[i]);
+     Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[0], "1000" , "abcde", gwAddress[1], phone_app[1], sensor_app[15+i]);
+     Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[0], "1000" , "abcde", gwAddress[2], phone_app[2], sensor_app[30+i]);
+
+      Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[1], "2000" , "abcde", gwAddress[0], phone_app[0], sensor_app[i]);
+     Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[1], "2000" , "abcde", gwAddress[1], phone_app[1], sensor_app[15+i]);
+     Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[1], "2000" , "abcde", gwAddress[2], phone_app[2], sensor_app[30+i]);
+
+      Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[2], "3000" , "abcde", gwAddress[0], phone_app[0], sensor_app[i]);
+     Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[2], "3000" , "abcde", gwAddress[1], phone_app[1], sensor_app[15+i]);
+     Simulator::Schedule (Seconds (9.), &DoctorRegisterApp::SendLoginInfo, doctor_app[2], "3000" , "abcde", gwAddress[2], phone_app[2], sensor_app[30+i]);
+  }
 
 
 
 
 
-//   Ipv4AddressHelper address;
-//   address.SetBase ("10.1.1.0", "255.255.255.0");
-//   Ipv4InterfaceContainer interfaces = address.Assign (devices);
-
-//   uint16_t sinkPort = 8080;
-  
-//   /*Address doctorAddress[doctorNodes];
-//   Address patientAddress[patientNodes];
-//   Address sensorAddress[sensorNodes];
-//   int i=0;
-//   for(int j=0;j<doctorNodes;i++,j++)
-//   {
-//     doctorAddress[j]=InetSocketAddress (interfaces.GetAddress (i), sinkPort);
-//   }
-//   Address gwAddress = InetSocketAddress(interfaces.GetAddress (i), sinkPort);
-//   i++;
-//   for(int j=0;j<patientNodes;i++,j++)
-//   {
-//     patientAddress[j] =InetSocketAddress (interfaces.GetAddress (i), sinkPort);
-//   }
-//   for(int j=0;j<sensorNodes;i++,j++)
-//   {
-//     sensorAddress[j] = InetSocketAddress (interfaces.GetAddress (i), sinkPort);
-//   }*/
-//    // 0 is doctor 1 is gw
-//    //(InetSocketAddress (interfaces.GetAddress (i), sinkPort));
-//   Address doctorAddress (InetSocketAddress (interfaces.GetAddress (0), sinkPort));
-//   Address gwAddress (InetSocketAddress (interfaces.GetAddress (1), sinkPort));
-
-//   Ptr<Socket> doctor_listener = Socket::CreateSocket (nodes.Get (0), TcpSocketFactory::GetTypeId ());
-//   Ptr<Socket> doctor_speaker = Socket::CreateSocket (nodes.Get (0), TcpSocketFactory::GetTypeId ());
 
   
-//  /* Ptr<Socket> doctor_listener[doctorNodes];
-//   Ptr<Socket> doctor_speaker[doctorNodes];
-//   for(int i=0;i<doctorNodes;i++)
-//   {
-//     doctor_listener[i] = Socket::CreateSocket (nodes.Get (i), TcpSocketFactory::GetTypeId ());
-//     doctor_speaker[i]  = Socket::CreateSocket (nodes.Get (i), TcpSocketFactory::GetTypeId ());
-//   }*/
-//   Ptr<Socket> gw_listener = Socket::CreateSocket (nodes.Get (1), TcpSocketFactory::GetTypeId ());
-//   Ptr<Socket> gw_speaker = Socket::CreateSocket (nodes.Get (1), TcpSocketFactory::GetTypeId ());
-
-//   /*doctor_listener->TraceConnectWithoutContext ("CongestionWindow", MakeCallback (&CwndChange));
-//   gw_listener->TraceConnectWithoutContext ("CongestionWindow", MakeCallback (&CwndChange));
-//   gw_speaker->TraceConnectWithoutContext ("CongestionWindow", MakeCallback (&CwndChange));
-//   doctor_speaker->TraceConnectWithoutContext ("CongestionWindow", MakeCallback (&CwndChange));*/
-//   //Ptr<DoctorRegisterApp> doctor_app[doctorNodes];
-//   //for(int i=0;i<doctorNodes;i++)doctor_app[i] = CreateObject<DoctorRegisterApp> ();
-//   Ptr<DoctorRegisterApp> doctor_app = CreateObject<DoctorRegisterApp> ();
-//   Ptr<GatewayApp> gw_app = CreateObject<GatewayApp> ();
-
-//   doctor_app->SetStartTime (Seconds (1.));
-//   doctor_app->SetStopTime (Seconds (20.));
-  
-//   gw_app->SetStartTime (Seconds (1.));
-//   gw_app->SetStopTime (Seconds (20.));
-
-//   doctor_app->Setup (doctor_speaker,doctor_listener, gwAddress, 1040, 1000, DataRate ("1Mbps"),sinkPort,5);
-//   gw_app->Setup (gw_speaker,gw_listener, doctorAddress, 1040, 1000, DataRate ("1Mbps"),sinkPort,6,10);
-
-//   nodes.Get (0)->AddApplication (doctor_app);
-//   nodes.Get (1)->AddApplication (gw_app);
-//   //take some input from the user and send them to the gateway
-//   //Gateway will then process it and return the good stuff.
-//   doctor_app->StartSending("591022132\nabcdefgh");
-
-  
-//   Ptr <Packet> packet1 = Create <Packet> (400);
-//   Ptr <Packet> packet2 = Create <Packet> (800);
-//   doctor_app->SendPacket(packet1);
-//   Simulator::Schedule (Seconds (2), &DoctorRegisterApp::SendRegisterInfo, doctor_app[0], "1000\n" , "abcde", doctorAddress);
-//   Simulator::Schedule (Seconds (2), &DoctorRegisterApp::SendPacket, doctor_app ,packet2);
-//  Simulator::Schedule (Seconds (2), &MyApp::SendPacket,doctor_app);
-//   /*devices.Get (0)->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback (&RxDrop));
-//   devices.Get (1)->TraceConnectWithoutContext ("PhyRxDrop", MakeCallback (&RxDrop));*/
-
   Simulator::Stop (Seconds (20));
   Simulator::Run ();
   Simulator::Destroy ();
