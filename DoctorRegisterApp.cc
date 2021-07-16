@@ -168,6 +168,10 @@ DoctorRegisterApp::SendPacket (Ptr<Packet> packet)
 void DoctorRegisterApp::SendRegisterInfo(string Mid, string PW, Address add)
 {
   char x = (char)(DOCTOR_REGISTER + '0');
+  //generate rd a random number, save it as its rd value. 
+  //use rd and PW and generate their hash,
+  //stringify this.
+  //send.
   string g = x + Mid  + '\n' + PW;
   Ptr<Packet> p = packetize(g);
 
@@ -310,7 +314,7 @@ RecvString(Ptr<Socket> sock)//Callback
         {
         prev = (int)data[i];
         i++;
-        cout << prev << ": ";
+       // cout << prev << ": ";
         for(int j=0;j<prev;i++,j++)
         {
           if(q==0)C[j]=data[i];
@@ -321,9 +325,9 @@ RecvString(Ptr<Socket> sock)//Callback
           else if(q==5)KjIV[j]=data[i];
           else if(q==6)Kl[j]=data[i];
           else KlIV[j]=data[i];
-          cout << (int)data[i] << " ";
+          //cout << (int)data[i] << " ";
         }
-        cout << endl;
+        //cout << endl;
         
         }
       }
@@ -331,102 +335,103 @@ RecvString(Ptr<Socket> sock)//Callback
       {
         NS_LOG_INFO("WE DID IT");
 
-        byte Vip[100];
-        byte TT[100];
-        int totalsz;
-        int TTsz;
+      //   byte Vip[100];
+      //   byte TT[100];
+      //   int totalsz;
+      //   int TTsz;
 
-        for(int q=0;q<num;q++)
-        {
-          if(q==0)prev=data[i],totalsz = prev;
-          else prev=data[i],TTsz = prev;
-          //cout << prev <<": ";
-          i++;
-          for(int j=0;j<prev;j++)
-          {
-            //cout << (int)data[i]<<" ";
-            if(q==0)Vip[j]=data[i++];
-            else TT[j]=data[i++];
+      //   for(int q=0;q<num;q++)
+      //   {
+      //     if(q==0)prev=data[i],totalsz = prev;
+      //     else prev=data[i],TTsz = prev;
+      //     //cout << prev <<": ";
+      //     i++;
+      //     for(int j=0;j<prev;j++)
+      //     {
+      //       //cout << (int)data[i]<<" ";
+      //       if(q==0)Vip[j]=data[i++];
+      //       else TT[j]=data[i++];
             
-          }
-         // cout << endl;
-        }
+      //     }
+      //    // cout << endl;
+      //   }
 
 
-        byte Midp[10],curTime[100],SNjp[16];
-        std::string digest1,digest2,digest3;
-        SHA3_256 hash;
-        hash.Update((const byte*)Mid.data(), Mid.size());
-        digest1.resize(hash.DigestSize());
-        hash.Final((byte*)&digest1[0]);
-        byte sex[16];
-        for(int q=0;q<16;q++)sex[q]=Kssk[q];
-        hash.Update((const byte*)Kssk.data(), (size_t)16);
-        digest2.resize(hash.DigestSize());
-        hash.Final((byte*)&digest2[0]);
+      //   byte Midp[10],curTime[100],SNjp[16];
+      //   std::string digest1,digest2,digest3;
+      //   SHA3_256 hash;
+      //   hash.Update((const byte*)Mid.data(), Mid.size());
+      //   digest1.resize(hash.DigestSize());
+      //   hash.Final((byte*)&digest1[0]);
+      //   byte sex[16];
+      //   for(int q=0;q<16;q++)sex[q]=Kssk[q];
+      //   hash.Update((const byte*)Kssk.data(), (size_t)16);
+      //   digest2.resize(hash.DigestSize());
+      //   hash.Final((byte*)&digest2[0]);
 
-        hash.Update(M,(size_t)16 );
-        digest3.resize(hash.DigestSize());
-        hash.Final((byte*)&digest3[0]);
+      //   hash.Update(M,(size_t)16 );
+      //   digest3.resize(hash.DigestSize());
+      //   hash.Final((byte*)&digest3[0]);
 
-        byte ans[32];
-        for(int q=0;q<32;q++)ans[q]=(digest1[q]^digest2[q]^digest3[q]);
+      //   byte ans[32];
+      //   for(int q=0;q<32;q++)ans[q]=(digest1[q]^digest2[q]^digest3[q]);
         
-        byte a[16],b[16];
-        int j=0;
-        for(int q=0;q<16;q++)a[q]=(byte)ans[j++];
-        for(int q=0;q<16;q++)b[q]=(byte)ans[j++];
+      //   byte a[16],b[16];
+      //   int j=0;
+      //   for(int q=0;q<16;q++)a[q]=(byte)ans[j++];
+      //   for(int q=0;q<16;q++)b[q]=(byte)ans[j++];
 
-        SecByteBlock chubby(a,AES::DEFAULT_KEYLENGTH);
-        SecByteBlock chubbyIV(b,AES::BLOCKSIZE);
-        CFB_Mode<AES>::Decryption dc(chubby, chubby.size(), chubbyIV);
-        dc.ProcessData(Vip, Vip, (size_t)(totalsz+1) );
-        i=0;
-        for(int q=0;q<3;q++)
-        {
-          if(q==0)prev=16;
-          else if(q==1)prev=4;
-          else prev=Vip[i++];
-          cout << prev << ": ";
-          for(int j=0;j<prev;j++)
-          {
-            cout << (int)data[i]<<" ";
-            if(q==0)SNjp[j]=Vip[i++];
-            else if(q==1)Midp[j]=Vip[i++];
-            else curTime[j]=Vip[i++];
-          }
-          cout << endl;
-        }
-        string tempTime="";
-        for(int q=0;q<TTsz;q++)tempTime+=(char)curTime[q];
-        Time cur = Simulator::Now();
-        TimeValue tv(cur);
-        Ptr<AttributeChecker> check;
-        tv.DeserializeFromString(tempTime,check);
-        Time jeez = tv.Get();
-        Time christ = Simulator::Now();
-        Time comp = NanoSeconds(50000000);
-        if(christ-jeez > comp)
-        {
-          NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
-          return;
-        }
-        for(int q=0;q<16;q++)
-        {
-          if((byte)Kssk[q]!=SNjp[q])
-          {
-            NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED!"<<END_CODE);
-            return;
-          }
-        }
-        for(int q=0;q<4;q++)
-        {
-          if((byte)Mid[q]!=Midp[q])
-          {
-            NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED!"<<END_CODE);
-            return;
-          }
-        }
+      //   SecByteBlock chubby(a,AES::DEFAULT_KEYLENGTH);
+      //   SecByteBlock chubbyIV(b,AES::BLOCKSIZE);
+      //   CFB_Mode<AES>::Decryption dc(chubby, chubby.size(), chubbyIV);
+      //   dc.ProcessData(Vip, Vip, (size_t)(totalsz+1) );
+      //   i=0;
+      //   for(int q=0;q<3;q++)
+      //   {
+      //     if(q==0)prev=16;
+      //     else if(q==1)prev=4;
+      //     else prev=Vip[i++];
+      //     if(prev > 50)cout<<"CONTEMPLATE\n";
+      //     cout << prev << ": ";
+      //     for(int j=0;j<prev;j++)
+      //     {
+      //       cout << (int)data[i]<<" ";
+      //       if(q==0)SNjp[j]=Vip[i++];
+      //       else if(q==1)Midp[j]=Vip[i++];
+      //       else curTime[j]=Vip[i++];
+      //     }
+      //     cout << endl;
+      //  }
+      //   string tempTime="";
+      //   for(int q=0;q<TTsz;q++)tempTime+=(char)curTime[q];
+      //   Time cur = Simulator::Now();
+      //   TimeValue tv(cur);
+      //   Ptr<AttributeChecker> check;
+      //   tv.DeserializeFromString(tempTime,check);
+      //   Time jeez = tv.Get();
+      //   Time christ = Simulator::Now();
+      //   Time comp = NanoSeconds(800000000);
+      //   if(christ-jeez > comp)
+      //   {
+      //     NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
+      //     return;
+      //   }
+      //   for(int q=0;q<16;q++)
+      //   {
+      //     if((byte)Kssk[q]!=SNjp[q])
+      //     {
+      //       NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED!"<<END_CODE);
+      //       return;
+      //     }
+      //   }
+      //   for(int q=0;q<4;q++)
+      //   {
+      //     if((byte)Mid[q]!=Midp[q])
+      //     {
+      //       NS_LOG_INFO(RED_CODE << "PACKET CORRUPTED!"<<END_CODE);
+      //       return;
+      //     }
+      //   }
         NS_LOG_INFO(RED_CODE<<"SUCCESSFULLY ESTABLISHED CONNECTTION WITH SENSOR"<<END_CODE);
       }
       
