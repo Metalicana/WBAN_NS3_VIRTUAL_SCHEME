@@ -267,10 +267,8 @@ GatewayApp::StopApplication (void)
 }
 void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
 {
-  //generate Kj and Kl ans Skey
-  //Encrypt hash and stuff
-  //produce output. send it to doctor
-  //save the three keys of the medical professional map it with his Mid
+  //PW er jagay ekhon EPW hobe
+  
   NS_LOG_INFO(RED_CODE<<Mid << END_CODE);
   if(doctor_exist[Mid]==true)
   {
@@ -346,6 +344,7 @@ void GatewayApp::DoctorRegistration(string Mid, string PW, Address address)
   digest1.resize(hash.DigestSize());
   hash.Final((byte*)&digest1[0]);
 
+  //Use EPW instead of PW
   hash.Update((const byte*)PW.data(), PW.size());
   digest2.resize(hash.DigestSize());
   hash.Final((byte*)&digest2[0]);
@@ -459,6 +458,7 @@ RecvString(Ptr<Socket> sock)//Callback
             i++;
           }
           i++;
+          //from here retrieve EPW and save it as is
           while(data[i]!=0)
           {
             PW+=(char)((int)data[i]);
@@ -516,7 +516,7 @@ RecvString(Ptr<Socket> sock)//Callback
             if(q==0)val=32;
             else if(q>0&&q<4)val=16;
             else val=TTsz,i++;
-            cout << val << ": ";
+            //cout << val << ": ";
             for(int s=0;s<val;s++,i++)
             {
               if(q==0)HMid[s]=CIDi[i];
@@ -524,9 +524,9 @@ RecvString(Ptr<Socket> sock)//Callback
               else if(q==2)Ui[s]=CIDi[i];
               else if(q==3)SNj[s]=CIDi[i];
               else Ts[s]=CIDi[i];
-              cout << (int)CIDi[i] << " ";
+              //cout << (int)CIDi[i] << " ";
             }
-            cout << endl;
+          //  cout << endl;
             
           }
           string tempTime="";
@@ -546,7 +546,7 @@ RecvString(Ptr<Socket> sock)//Callback
           tv.DeserializeFromString(tempTime,check);
           Time jeez = tv.Get();
           Time christ = Simulator::Now();
-          Time comp = NanoSeconds(50000000);
+          Time comp = NanoSeconds(5000000000);
           if(christ-jeez > comp)
           {
             NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
