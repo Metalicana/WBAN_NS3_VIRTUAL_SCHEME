@@ -279,7 +279,7 @@ RecvString(Ptr<Socket> sock)//Callback
           if(q==0)prev=4;
           else if(q<4)prev=16;
           else prev=TTsz,i++;
-          cout << prev << ": ";
+          //cout << prev << ": ";
           for(int w=0;w<prev;w++,i++)
           {
             if(q==0)Mid[w]=Vip[i];
@@ -287,9 +287,9 @@ RecvString(Ptr<Socket> sock)//Callback
             else if(q==2)SNjp[w]=Vip[i];
             else if(q==3)M[w]=Vip[i];
             else curTime[w]=Vip[i];
-            cout << (int)Vip[i] << " ";
+            //cout << (int)Vip[i] << " ";
           }
-          cout << endl;
+          //cout << endl;
         }
 
         string tempTime="";
@@ -300,7 +300,7 @@ RecvString(Ptr<Socket> sock)//Callback
         tv.DeserializeFromString(tempTime,check);
         Time jeez = tv.Get();
         Time christ = Simulator::Now();
-        Time comp = NanoSeconds(50000000);
+        Time comp = NanoSeconds(5000000000);
         if(christ-jeez > comp)
         {
           NS_LOG_INFO(RED_CODE << "PACKET DELAY LIMIT REACHED"<<END_CODE);
@@ -341,7 +341,7 @@ RecvString(Ptr<Socket> sock)//Callback
         TimeValue tv2(cur2);
         Ptr<AttributeChecker> check2;
         string g = tv2.SerializeToString(check2);
-        byte message[1000];
+        byte message[10000];
         message[0]=SENSOR_SKEY+'0';
         message[1]=2;
 
@@ -367,11 +367,8 @@ RecvString(Ptr<Socket> sock)//Callback
         Ptr<Socket> speak2 = Socket::CreateSocket (GetNode(), TcpSocketFactory::GetTypeId ());
         Ptr<Packet> p = Create<Packet>(message,i);
         speak2->Bind();
-        //InetSocketAddress ass = InetSocketAddress::ConvertFrom(doctor_address[Midp]);
-        //cout << ass.GetIpv4() << endl;
         speak2->Connect(doctor_address[Midp]);
         speak2->Send(p);
-        speak2->ShutdownSend();
       }
       
     }
